@@ -2,7 +2,7 @@
 
 PWA aplikacija za praćenje i izračun troškova električne energije prema aktualnim HEP tarifama.
 
-🔗 **[Otvori aplikaciju](https://borisobis.github.io/strujameter/)**
+🔗 **[Otvori aplikaciju](https://borisorbis.github.io/strujameter/)**
 
 ---
 
@@ -31,7 +31,7 @@ PWA aplikacija za praćenje i izračun troškova električne energije prema aktu
 
 ## Instalacija kao PWA
 
-1. Otvori [https://borisobis.github.io/strujameter/](https://borisobis.github.io/strujameter/) u Chrome/Safari
+1. Otvori u Chrome/Safari
 2. Na mobitelu: izbornik → **"Dodaj na početni zaslon"**
 3. Na desktopu: ikona instalacije u adresnoj traci
 4. Aplikacija radi **offline** nakon prve posjete
@@ -58,21 +58,21 @@ Format JSON datoteke:
   "distJT": 0.023933,
   "prijenosJT": 0.008175,
   "opskrbaJT": 0.037686,
-  "ommJT": 1.043,
-  "nakOpskrbaJT": 0.053,
+  "ommJT": 1.043000,
+  "nakOpskrbaJT": 0.053000,
   "distVT": 0.044446,
   "prijenosVT": 0.021256,
   "opskrbaVT": 0.097189,
   "distNT": 0.020514,
   "prijenosNT": 0.008175,
   "opskrbaNT": 0.047688,
-  "ommDvot": 1.983,
-  "nakOpskrbaDvot": 0.982,
+  "ommDvot": 1.983000,
+  "nakOpskrbaDvot": 0.982000,
   "distDIR": 0.037608,
   "prijenosDIR": 0.014716,
   "opskrbaDIR": 0.091324,
-  "ommDIR": 1.983,
-  "nakOpskrbaDIR": 0.982,
+  "ommDIR": 1.983000,
+  "nakOpskrbaDIR": 0.982000,
   "OIE": 0.013239,
   "solidarna": 0.003982,
   "PDV": 13,
