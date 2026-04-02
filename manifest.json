@@ -1,0 +1,37 @@
+{
+  "name": "StrujaMeter — HEP Kalkulator",
+  "short_name": "StrujaMeter",
+  "description": "Praćenje potrošnje električne energije prema HEP tarifama",
+  "start_url": "/strujameter/",
+  "scope": "/strujameter/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0f1e",
+  "theme_color": "#0a0f1e",
+  "lang": "hr",
+  "icons": [
+    {
+      "src": "/strujameter/icons/favicon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/strujameter/icons/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/strujameter/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/strujameter/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["utilities", "finance"]
+}

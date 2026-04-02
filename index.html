@@ -1,0 +1,2598 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#0a0f1e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="StrujaMeter">
+<meta name="description" content="Praćenje potrošnje električne energije prema HEP tarifama">
+<title>StrujaMeter — HEP Kalkulator</title>
+<link rel="manifest" href="/strujameter/manifest.json">
+<link rel="apple-touch-icon" href="/strujameter/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="/strujameter/icons/favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap&font-display=swap');
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+:root {
+  --bg: #0a0f1e;
+  --bg2: #111827;
+  --bg3: #1a2235;
+  --card: #151f33;
+  --border: #1e2d45;
+  --accent: #00d4ff;
+  --accent2: #0099bb;
+  --success: #00e5b0;
+  --warn: #f59e0b;
+  --danger: #ef4444;
+  --text: #e2e8f0;
+  --text2: #94a3b8;
+  --text3: #475569;
+  --radius: 12px;
+  --mono: 'DM Mono', 'JetBrains Mono', 'Fira Code', ui-monospace, 'Cascadia Code', Consolas, monospace;
+  --sans: 'Syne', 'Inter', 'Helvetica Neue', Arial, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+.light {
+  --bg: #f0f4f8;
+  --bg2: #e2e8f0;
+  --bg3: #dde3ec;
+  --card: #ffffff;
+  --border: #cbd5e1;
+  --accent: #0077aa;
+  --accent2: #005588;
+  --success: #059669;
+  --warn: #d97706;
+  --danger: #dc2626;
+  --text: #0f172a;
+  --text2: #334155;
+  --text3: #64748b;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  transition: background 0.3s, color 0.3s;
+  overflow-x: hidden;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  backdrop-filter: blur(10px);
+}
+.logo {
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--accent);
+}
+.logo span { color: var(--text); }
+.topbar-right { display: flex; align-items: center; gap: 14px; }
+
+/* Theme slider */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.theme-icon { font-size: 1rem; }
+.toggle-track {
+  width: 52px; height: 28px;
+  background: #334155;
+  border: none;
+  border-radius: 28px;
+  position: relative;
+  cursor: pointer;
+  transition: background 0.3s;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+}
+.toggle-track.on { background: var(--accent2); }
+.toggle-knob {
+  width: 22px; height: 22px;
+  background: #fff;
+  border-radius: 50%;
+  position: absolute;
+  top: 3px; left: 3px;
+  transition: left 0.22s cubic-bezier(0.4,0,0.2,1);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
+.toggle-track.on .toggle-knob { left: 27px; }
+
+/* Hamburger */
+.hamburger {
+  display: flex; flex-direction: column; gap: 4px;
+  cursor: pointer; padding: 4px;
+}
+.hamburger span {
+  display: block; width: 22px; height: 2px;
+  background: var(--text2);
+  border-radius: 2px;
+  transition: 0.3s;
+}
+
+/* ── SIDEBAR / SETTINGS ── */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 200;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.3s;
+}
+.overlay.open { opacity: 1; pointer-events: all; }
+.sidebar {
+  position: fixed; top: 0; right: -420px;
+  width: 380px; height: 100vh;
+  background: var(--bg2);
+  border-left: 1px solid var(--border);
+  z-index: 201;
+  transition: right 0.35s cubic-bezier(0.4,0,0.2,1);
+  overflow-y: auto;
+  padding: 24px;
+}
+.sidebar.open { right: 0; }
+.sidebar-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 28px;
+}
+.sidebar-title { font-size: 1.2rem; font-weight: 700; }
+.close-btn {
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px;
+  width: 32px; height: 32px;
+  cursor: pointer; font-size: 1.1rem;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ── MAIN LAYOUT ── */
+.main { padding: 20px; max-width: 900px; margin: 0 auto; }
+
+/* ── CARDS ── */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+.card-title {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+/* ── SETUP SCREEN ── */
+.setup-screen {
+  display: none;
+  position: fixed; inset: 0;
+  background: var(--bg);
+  z-index: 300;
+  overflow-y: auto;
+  padding: 40px 20px;
+}
+.setup-screen.active { display: flex; flex-direction: column; align-items: center; }
+.setup-inner { max-width: 480px; width: 100%; }
+.setup-title { font-size: 2rem; font-weight: 800; margin-bottom: 8px; }
+.setup-sub { color: var(--text2); margin-bottom: 32px; font-size: 0.95rem; }
+
+/* ── FORM ELEMENTS ── */
+.form-group { margin-bottom: 18px; }
+.form-label {
+  display: block;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text2);
+  margin-bottom: 6px;
+  letter-spacing: 0.5px;
+}
+.form-input, .form-select {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-input:focus, .form-select:focus { border-color: var(--accent); }
+.form-input::placeholder { color: var(--text3); }
+
+/* ── TABS ── */
+.tab-nav { display: flex; gap: 4px; }
+.tab-btn {
+  background: none; border: none; color: var(--text3);
+  padding: 6px 10px; border-radius: 8px; cursor: pointer;
+  transition: color 0.2s, background 0.2s;
+  display: flex; align-items: center;
+}
+.tab-btn:hover { color: var(--text); background: var(--bg3); }
+.tab-btn.active { color: var(--accent); background: rgba(0,212,255,0.1); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Stats per meter */
+.meter-stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.meter-stat-card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 12px 14px;
+}
+.meter-stat-card.jt  { border-color: rgba(148,163,184,0.4); }
+.meter-stat-card.dvot { border-color: rgba(59,130,246,0.4); }
+.meter-stat-card.dir { border-color: rgba(100,116,139,0.4); }
+.meter-stat-title { font-size: 0.7rem; color: var(--text3); margin-bottom: 6px; font-weight: 600; letter-spacing: 0.04em; }
+.meter-stat-kwh { font-size: 1.4rem; font-weight: 800; color: var(--accent); font-family: var(--mono); }
+.meter-stat-eur { font-size: 0.82rem; color: var(--text2); margin-top: 2px; font-family: var(--mono); }
+
+/* Month table */
+.month-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.month-table th { color: var(--text3); font-weight: 600; padding: 6px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+.month-table td { padding: 8px 8px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.month-table tr.clickable { cursor: pointer; transition: background 0.15s; }
+.month-table tr.clickable:hover { background: var(--bg3); }
+.month-table .month-kwh { color: var(--accent); font-weight: 600; font-family: var(--mono); }
+.month-table .month-eur { color: var(--text); font-family: var(--mono); }
+.month-detail-modal .meter-section { margin-bottom: 14px; }
+.month-detail-modal .meter-section h4 { font-size: 0.8rem; color: var(--accent); margin-bottom: 8px; }
+.month-detail-row { display: flex; justify-content: space-between; font-size: 0.78rem; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.month-detail-row .label { color: var(--text3); }
+.month-detail-row .val { font-family: var(--mono); color: var(--text); }
+
+/* Tariff colors for charts */
+.tariff-jt-color { color: #94a3b8; }
+.tariff-dvot-color { color: #3b82f6; }
+.tariff-dir-color { color: #64748b; }
+
+/* Tariff checklist */
+.tariff-list { display: flex; flex-direction: column; gap: 10px; }
+.tariff-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+.tariff-item.selected { border-color: var(--accent); background: var(--bg2); }
+.tariff-check {
+  width: 18px; height: 18px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  margin-top: 2px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  transition: 0.2s;
+}
+.tariff-item.selected .tariff-check {
+  background: var(--accent); border-color: var(--accent);
+}
+.tariff-check::after {
+  content: '✓';
+  font-size: 0.7rem;
+  color: var(--bg);
+  display: none;
+}
+.tariff-item.selected .tariff-check::after { display: block; }
+.tariff-info { flex: 1; }
+.tariff-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 3px; }
+.tariff-desc { font-size: 0.78rem; color: var(--text2); line-height: 1.4; }
+.tariff-badge {
+  font-family: var(--mono);
+  font-size: 0.65rem;
+  padding: 2px 7px;
+  border-radius: 20px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  margin-top: 4px;
+  display: inline-block;
+}
+
+/* Buttons */
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 0.9rem;
+  transition: 0.2s;
+}
+.btn-primary {
+  background: var(--accent);
+  color: var(--bg);
+  width: 100%;
+  justify-content: center;
+}
+.btn-primary:hover { background: var(--accent2); }
+.btn-ghost {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-danger {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+}
+.btn-danger:hover { background: var(--danger); color: #fff; }
+.btn-sm { padding: 7px 14px; font-size: 0.8rem; }
+
+/* ── READING INPUT SECTION ── */
+.reading-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 480px) { .reading-grid { grid-template-columns: 1fr; } }
+
+/* ── STATUS BAR ── */
+.status-bar {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  grid-template-rows: auto auto;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.stat-box {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+}
+.stat-box.full-width {
+  grid-column: 1 / -1;
+}
+.stat-val {
+  font-family: var(--mono);
+  font-size: 1.3rem;
+  font-weight: 500;
+  color: var(--accent);
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+.stat-label { font-size: 0.7rem; color: var(--text2); letter-spacing: 1px; text-transform: uppercase; }
+
+/* ── PROGRESS BAR ── */
+.progress-wrap { margin-top: 12px; }
+.progress-label {
+  display: flex; justify-content: space-between;
+  font-size: 0.75rem; color: var(--text2);
+  margin-bottom: 6px;
+}
+.progress-track {
+  height: 8px;
+  background: var(--bg3);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 8px;
+  background: linear-gradient(90deg, var(--success), var(--accent));
+  transition: width 0.5s;
+}
+.progress-fill.warn { background: linear-gradient(90deg, var(--warn), #ef4444); }
+
+/* ── ALERT ── */
+.alert {
+  display: none;
+  padding: 14px 18px;
+  border-radius: 10px;
+  border-left: 4px solid var(--danger);
+  background: rgba(239,68,68,0.1);
+  font-size: 0.88rem;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+.alert.show { display: block; }
+.alert-title { font-weight: 700; color: var(--danger); margin-bottom: 4px; }
+
+/* ── CHART AREA ── */
+.chart-wrapper {
+  position: relative;
+  height: 220px;
+}
+
+/* ── HISTORY TABLE ── */
+.history-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 0.8rem;
+}
+.history-table th {
+  padding: 8px 10px;
+  text-align: left;
+  color: var(--text3);
+  font-size: 0.68rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+}
+.history-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text2);
+}
+.history-table tr:last-child td { border-bottom: none; }
+.history-table .amount { color: var(--accent); font-weight: 500; }
+.history-table .over-limit { color: var(--danger); }
+
+/* ── EXPORT BUTTONS ── */
+.export-row { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* ── PRICE SETTINGS ── */
+.price-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.price-label {
+  font-size: 0.72rem; color: var(--text2);
+  margin-bottom: 4px; letter-spacing: 0.5px;
+}
+.price-section-label {
+  font-size: 0.78rem; font-weight: 700; color: var(--accent);
+  margin: 6px 0 6px; letter-spacing: 0.03em;
+}
+.meter-group-label {
+  font-size: 0.78rem; font-weight: 700; color: var(--accent);
+  margin: 14px 0 6px; padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.03em;
+}
+.meter-group-label:first-child { margin-top: 4px; }
+.prev-hint {
+  font-size: 0.68rem; color: var(--text3); font-weight: 400;
+  margin-left: 6px; font-family: var(--mono);
+}
+/* Meter input blocks */
+.meter-block {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  background: var(--bg3);
+}
+.meter-block:last-child { margin-bottom: 0; }
+.meter-block-title {
+  font-size: 0.8rem; font-weight: 700; color: var(--accent);
+  margin-bottom: 10px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+  letter-spacing: 0.03em;
+}
+.meter-block-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+}
+.price-grid3 {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; margin-bottom: 6px;
+}
+.price-grid3 .form-input { font-size: 0.72rem; padding: 5px 28px 5px 7px; }
+.price-grid3 .price-label { font-size: 0.68rem; }
+.price-input-wrap { position: relative; }
+.price-input-wrap .unit {
+  position: absolute; right: 10px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.75rem; color: var(--text3);
+  font-family: var(--mono);
+  pointer-events: none;
+}
+
+/* Tooltip info */
+.info-tip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  font-size: 0.65rem;
+  color: var(--text3);
+  cursor: help;
+  margin-left: 5px;
+  position: relative;
+}
+.info-tip:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+  width: 220px;
+  color: var(--text2);
+  z-index: 999;
+  line-height: 1.4;
+}
+
+/* ── SECTION DIVIDER ── */
+.sec-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 18px 0;
+}
+
+/* ── EMPTY STATE ── */
+.empty-state {
+  text-align: center;
+  padding: 30px;
+  color: var(--text3);
+  font-size: 0.85rem;
+}
+
+/* ── EXPORT DROPDOWN ── */
+.export-dropdown { position: relative; }
+.export-trigger {
+  display: flex; align-items: center; justify-content: center;
+  width: 36px; height: 36px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text2);
+  cursor: pointer;
+  transition: 0.2s;
+}
+.export-trigger:hover { border-color: var(--accent); color: var(--accent); }
+.export-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px;
+  min-width: 180px;
+  z-index: 150;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+}
+.export-menu.open { display: block; }
+.export-menu button {
+  display: block; width: 100%;
+  text-align: left;
+  background: none; border: none;
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 0.88rem;
+  font-weight: 500;
+  padding: 9px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.export-menu button:hover { background: var(--bg3); }
+
+/* Scroll hint */
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 5px; }
+
+/* ── MODAL ── */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 400;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px;
+  max-width: 440px;
+  width: 100%;
+}
+.modal-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 16px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 20px; justify-content: flex-end; }
+
+/* ── EDIT BADGE ── */
+.btn-edit {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text3);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: 0.15s;
+  margin-right: 4px;
+}
+.btn-edit:hover { border-color: var(--accent); color: var(--accent); }
+.btn-del {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text3);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.btn-del:hover { border-color: var(--danger); color: var(--danger); }
+
+/* ── PWA INSTALL BANNER ── */
+.pwa-banner {
+  position: fixed;
+  bottom: -120px;
+  left: 0; right: 0;
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  z-index: 500;
+  transition: bottom 0.4s cubic-bezier(0.4,0,0.2,1);
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.25);
+}
+.pwa-banner.show { bottom: 0; }
+.pwa-banner-icon {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #0a0f1e, #1a2235);
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+.pwa-banner-text { flex: 1; min-width: 0; }
+.pwa-banner-title { font-weight: 700; font-size: 0.92rem; margin-bottom: 2px; }
+.pwa-banner-sub { font-size: 0.75rem; color: var(--text2); }
+.pwa-banner-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.pwa-btn-install {
+  background: var(--accent);
+  color: var(--bg);
+  border: none;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pwa-btn-dismiss {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text3);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+/* Animate in */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.card { animation: fadeUp 0.3s ease both; }
+
+/* ── CONSUMER SWITCHER ── */
+.consumer-dropdown { position: relative; }
+.consumer-trigger {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--bg3); border: 1px solid var(--border);
+  color: var(--text2); border-radius: 8px;
+  padding: 5px 10px; cursor: pointer;
+  font-family: var(--sans); font-size: 0.78rem; font-weight: 600;
+  transition: 0.2s; max-width: 130px;
+}
+.consumer-trigger:hover { border-color: var(--accent); color: var(--accent); }
+.consumer-trigger svg { flex-shrink: 0; }
+.consumer-trigger-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  max-width: 80px;
+}
+.consumer-menu {
+  display: none; position: absolute;
+  top: calc(100% + 8px); right: 0;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 6px;
+  min-width: 200px; z-index: 150;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+}
+.consumer-menu.open { display: block; }
+.consumer-menu-title {
+  font-size: 0.65rem; font-weight: 700; color: var(--text3);
+  letter-spacing: 1.5px; text-transform: uppercase;
+  padding: 4px 8px 6px; border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.consumer-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 7px;
+  cursor: pointer; transition: background 0.15s;
+}
+.consumer-item:hover { background: var(--bg3); }
+.consumer-item.active { background: rgba(0,212,255,0.1); }
+.consumer-item-name {
+  flex: 1; font-size: 0.88rem; font-weight: 500; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.consumer-item.active .consumer-item-name { color: var(--accent); }
+.consumer-item-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text3); flex-shrink: 0;
+}
+.consumer-item.active .consumer-item-dot { background: var(--accent); }
+.consumer-item-actions { display: flex; gap: 2px; }
+.consumer-action-btn {
+  background: none; border: none; color: var(--text3);
+  cursor: pointer; padding: 2px 5px; border-radius: 4px;
+  font-size: 0.8rem; transition: 0.15s;
+}
+.consumer-action-btn:hover { background: var(--bg3); color: var(--text); }
+.consumer-menu-sep { height: 1px; background: var(--border); margin: 4px 0; }
+.consumer-add-btn {
+  display: flex; align-items: center; gap: 6px;
+  width: 100%; text-align: left; background: none; border: none;
+  color: var(--accent); font-family: var(--sans);
+  font-size: 0.85rem; font-weight: 600;
+  padding: 8px 10px; border-radius: 7px;
+  cursor: pointer; transition: background 0.15s;
+}
+.consumer-add-btn:hover { background: rgba(0,212,255,0.1); }
+</style>
+</head>
+<body>
+
+<!-- SETUP SCREEN -->
+<div class="setup-screen active" id="setupScreen">
+  <div class="setup-inner">
+    <div style="font-size:2.5rem; margin-bottom:12px;">⚡</div>
+    <div class="setup-title">StrujaMeter</div>
+    <div class="setup-sub">Postavljanje kalkulatora potrošnje električne energije (HEP tarife)</div>
+
+    <div class="card">
+      <div class="card-title">Početno stanje brojila</div>
+      <div id="meterSetupFields">
+        <!-- dinamički -->
+      </div>
+
+      <div class="sec-divider"></div>
+      <div class="card-title">Odaberite vaš tarifni model</div>
+
+      <div class="tariff-list">
+        <div class="tariff-item" data-tariff="jednot" onclick="toggleTariff(this)">
+          <div class="tariff-check"></div>
+          <div class="tariff-info">
+            <div class="tariff-name">⬜ Jednotarifni (Bijeli)</div>
+            <div class="tariff-desc">Jedna cijena kroz cijeli dan — jednostavno, bez vremenskih zona.</div>
+            <div class="tariff-badge">JT · Jednotarifno brojilo</div>
+          </div>
+        </div>
+        <div class="tariff-item" data-tariff="dvot" onclick="toggleTariff(this)">
+          <div class="tariff-check"></div>
+          <div class="tariff-info">
+            <div class="tariff-name">🔵 Dvotarifni (Plavi)</div>
+            <div class="tariff-desc">VT danju, NT noću i vikendom. Idealan ako koristite kućanske uređaje noću.</div>
+            <div class="tariff-badge">VT + NT · Višetarifno brojilo</div>
+          </div>
+        </div>
+        <div class="tariff-item" data-tariff="dirigirana" onclick="toggleTariff(this)">
+          <div class="tariff-check"></div>
+          <div class="tariff-info">
+            <div class="tariff-name">⚫ Dirigirana (Crni model)</div>
+            <div class="tariff-desc">Dopunski model — HEP daljinski upravlja isporukom (≥8h/dan, uglavnom NT period). Jedna cijena, meter može imati 2 registra (R1+R2 se zbrajaju). Za akumulacijske peći i bojlere.</div>
+            <div class="tariff-badge">DIR jedinstvena · Posebno brojilo (R1+R2)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sec-divider"></div>
+      <div class="form-group">
+        <label class="form-label">Datum prvog očitanja</label>
+        <input type="date" class="form-input" id="setupDate">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Obračunsko razdoblje (6 mj. prag: 3.000 kWh)</label>
+        <input type="date" class="form-input" id="periodStart" placeholder="Početak tekućeg 6-mj. perioda">
+      </div>
+
+      <button class="btn btn-primary" onclick="completeSetup()" style="margin-top:8px;">
+        ✓ Pokreni praćenje
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- TOPBAR -->
+<div class="topbar" id="mainTopbar" style="display:none;">
+  <div class="theme-toggle">
+    <div class="toggle-track" id="themeToggle" onclick="toggleTheme()">
+      <div class="toggle-knob"></div>
+    </div>
+  </div>
+  <!-- TAB NAVIGATION -->
+  <div class="tab-nav">
+    <button class="tab-btn active" id="tab-pregled" onclick="switchTab('pregled')" title="Pregled">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+    </button>
+    <button class="tab-btn" id="tab-povijest" onclick="switchTab('povijest')" title="Povijest">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+    </button>
+    <button class="tab-btn" id="tab-mjeseci" onclick="switchTab('mjeseci')" title="Mjeseci">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    </button>
+  </div>
+  <!-- CONSUMER SWITCHER -->
+  <div class="consumer-dropdown" id="consumerDropdown">
+    <button class="consumer-trigger" onclick="toggleConsumerMenu()" title="Potrošači">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      <span class="consumer-trigger-name" id="consumerLabel">—</span>
+    </button>
+    <div class="consumer-menu" id="consumerMenu">
+      <div class="consumer-menu-title">Potrošači</div>
+      <div id="consumerList"></div>
+      <div class="consumer-menu-sep"></div>
+      <button class="consumer-add-btn" onclick="openAddConsumerModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Novi potrošač
+      </button>
+    </div>
+  </div>
+
+  <div class="hamburger" onclick="openSidebar()">
+    <span></span><span></span><span></span>
+  </div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="main" id="mainContent" style="display:none;">
+
+  <!-- ALERT -->
+  <div class="alert" id="overAlert">
+    <div class="alert-title">⚠️ Upozorenje — prekoračenje praga!</div>
+    <div id="alertText"></div>
+  </div>
+
+  <!-- ═══ TAB: PREGLED ═══ -->
+  <div id="tabContent-pregled" class="tab-content active">
+
+    <!-- STATS PO BROJIILMA (dinamički) -->
+    <div id="statsPerMeter"></div>
+
+    <!-- UKUPNO + PRAG -->
+    <div class="status-bar">
+      <div class="stat-box">
+        <div class="stat-val" id="statTotal">0</div>
+        <div class="stat-label">Ukupno kWh</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-val" id="statCost">0,00 €</div>
+        <div class="stat-label">Ukupni trošak</div>
+      </div>
+      <div class="stat-box full-width">
+        <div class="stat-val" id="statRemain">3000</div>
+        <div class="stat-label">Min. do praga (kWh)</div>
+      </div>
+    </div>
+
+    <!-- PROGRESS -->
+    <div class="card" style="animation-delay:0.05s">
+      <div class="card-title">Potrošnja u 6-mj. periodu <span class="info-tip" data-tip="Prag: 3.000 kWh / 6 mj. PO BROJILU&#10;Svako brojilo nezavisno.&#10;Iznad praga plaća se 35% više.">i</span></div>
+      <div class="progress-wrap">
+        <div class="progress-label">
+          <span id="progLabel">0 kWh</span>
+          <span style="color:var(--warn)">Prag: 3.000 kWh / brojilo</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progressBar" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- UNOS STANJA (dinamički) -->
+    <div class="card" style="animation-delay:0.1s">
+      <div class="card-title">Unos stanja brojila</div>
+      <div id="readingFields"></div>
+    </div>
+
+    <!-- GRAFOVI -->
+    <div class="card" style="animation-delay:0.15s">
+      <div class="card-title">Potrošnja (kWh) po tarifi</div>
+      <div class="chart-wrapper"><canvas id="chartKwh"></canvas></div>
+    </div>
+    <div class="card" style="animation-delay:0.18s">
+      <div class="card-title">Trošak (€) po tarifi</div>
+      <div class="chart-wrapper"><canvas id="chartEur"></canvas></div>
+    </div>
+
+  </div><!-- end tab pregled -->
+
+  <!-- ═══ TAB: POVIJEST ═══ -->
+  <div id="tabContent-povijest" class="tab-content">
+    <div class="card">
+      <div class="card-title">Povijest očitanja</div>
+      <div id="historyWrap">
+        <div class="empty-state">Još nema unesenih očitanja.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ TAB: MJESECI ═══ -->
+  <div id="tabContent-mjeseci" class="tab-content">
+    <div class="card">
+      <div class="card-title">Pregled po mjesecima</div>
+      <div id="monthsWrap">
+        <div class="empty-state">Još nema unesenih očitanja.</div>
+      </div>
+    </div>
+  </div>
+
+  <input type="file" id="importFile" accept=".json" style="display:none" onchange="importJSON(event)">
+  <input type="file" id="importPricesFile" accept=".json" style="display:none" onchange="importPrices(event)">
+
+</div>
+
+<!-- SIDEBAR SETTINGS -->
+<div class="overlay" id="overlay" onclick="closeSidebar()"></div>
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-title">⚙️ Postavke</div>
+    <button class="close-btn" onclick="closeSidebar()" aria-label="Zatvori postavke">✕</button>
+  </div>
+
+  <div class="card-title">Cijene struje — HEP komponente</div>
+  <div style="font-size:0.72rem;color:var(--text3);margin-bottom:4px;">Sve cijene bez PDV-a (€/kWh)</div>
+  <div id="pricesUpdatedLabel" style="font-size:0.7rem;color:var(--text3);margin-bottom:8px;font-family:var(--mono)"></div>
+
+  <!-- JT -->
+  <div class="price-section-label">⬜ Jednotarifni (JT)</div>
+  <div class="price-grid3">
+    <div><div class="price-label">Distribucija</div><div class="price-input-wrap"><input type="number" class="form-input" id="prDistJT" step="0.000001" value="0.023933"><span class="unit">€/kWh</span></div></div>
+    <div><div class="price-label">Prijenos</div><div class="price-input-wrap"><input type="number" class="form-input" id="prPrijenosJT" step="0.000001" value="0.008175"><span class="unit">€/kWh</span></div></div>
+    <div><div class="price-label">Opskrba</div><div class="price-input-wrap"><input type="number" class="form-input" id="prOpskrbaJT" step="0.000001" value="0.037686"><span class="unit">€/kWh</span></div></div>
+  </div>
+  <div class="price-grid">
+    <div><div class="price-label">Naknada OMM (mj.)</div><div class="price-input-wrap"><input type="number" class="form-input" id="prOmmJT" step="0.000001" value="1.043000"><span class="unit">€/mj</span></div></div>
+    <div><div class="price-label">Nak. opskrba (mj.)</div><div class="price-input-wrap"><input type="number" class="form-input" id="prNakOpskrbaJT" step="0.000001" value="0.053000"><span class="unit">€/mj</span></div></div>
+  </div>
+
+  <!-- VT/NT -->
+  <div class="price-section-label" style="margin-top:10px;">🔵 Dvotarifni (VT/NT)</div>
+  <div class="price-grid3">
+    <div><div class="price-label">Dist. VT</div><div class="price-input-wrap"><input type="number" class="form-input" id="prDistVT" step="0.000001" value="0.044446"><span class="unit">€/kWh</span></div></div>
+    <div><div class="price-label">Prijenos VT</div><div class="price-input-wrap"><input type="number" class="form-input" id="prPrijenosVT" step="0.000001" value="0.021256"><span class="unit">€/kWh</span></div></div>
+    <div><div class="price-label">Opskrba VT</div><div class="price-input-wrap"><input type="number" class="form-input" id="prOpskrbaVT" step="0.000001" value="0.097189"><span class="unit">€/kWh</span></div></div>
+  </div>
+  <div class="price-grid3">
+    <div><div class="price-label">Dist. NT</div><div class="price-input-wrap"><input type="number" class="form-input" id="prDistNT" step="0.000001" value="0.020514"><span class="unit">€/kWh</span></div></div>
+    <div><div class="price-label">Prijenos NT</div><div class="price-input-wrap"><input type="number" class="form-input" id="prPrijenosNT" step="0.000001" value="0.008175"><span class="unit">€/kWh</span></div></div>
+    <div><div class="price-label">Opskrba NT</div><div class="price-input-wrap"><input type="number" class="form-input" id="prOpskrbaNT" step="0.000001" value="0.047688"><span class="unit">€/kWh</span></div></div>
+  </div>
+  <div class="price-grid">
+    <div><div class="price-label">Naknada OMM (mj.)</div><div class="price-input-wrap"><input type="number" class="form-input" id="prOmmDvot" step="0.000001" value="1.983000"><span class="unit">€/mj</span></div></div>
+    <div><div class="price-label">Nak. opskrba (mj.)</div><div class="price-input-wrap"><input type="number" class="form-input" id="prNakOpskrbaDvot" step="0.000001" value="0.982000"><span class="unit">€/mj</span></div></div>
+  </div>
+
+  <!-- DIR -->
+  <div class="price-section-label" style="margin-top:10px;">⚫ Dirigirana (DIR)</div>
+  <div class="price-grid3">
+    <div><div class="price-label">Distribucija</div><div class="price-input-wrap"><input type="number" class="form-input" id="prDistDIR" step="0.000001" value="0.023933"><span class="unit">€/kWh</span></div></div>
+    <div><div class="price-label">Prijenos</div><div class="price-input-wrap"><input type="number" class="form-input" id="prPrijenosDIR" step="0.000001" value="0.008175"><span class="unit">€/kWh</span></div></div>
+    <div><div class="price-label">Opskrba</div><div class="price-input-wrap"><input type="number" class="form-input" id="prOpskrbaDIR" step="0.000001" value="0.037686"><span class="unit">€/kWh</span></div></div>
+  </div>
+  <div class="price-grid">
+    <div><div class="price-label">Naknada OMM (mj.)</div><div class="price-input-wrap"><input type="number" class="form-input" id="prOmmDIR" step="0.000001" value="1.043000"><span class="unit">€/mj</span></div></div>
+    <div><div class="price-label">Nak. opskrba (mj.)</div><div class="price-input-wrap"><input type="number" class="form-input" id="prNakOpskrbaDIR" step="0.000001" value="0.053000"><span class="unit">€/mj</span></div></div>
+  </div>
+
+  <!-- Ostale naknade -->
+  <div class="price-section-label" style="margin-top:10px;">Ostale naknade</div>
+  <div class="price-grid">
+    <div><div class="price-label">OIE naknada (€/kWh)</div><div class="price-input-wrap"><input type="number" class="form-input" id="prOIE" step="0.000001" value="0.013239"><span class="unit">€/kWh</span></div></div>
+    <div><div class="price-label">Solidarna (€/kWh)</div><div class="price-input-wrap"><input type="number" class="form-input" id="prSolidarna" step="0.000001" value="0.003982"><span class="unit">€/kWh</span></div></div>
+  </div>
+  <div class="price-grid">
+    <div><div class="price-label">PDV (%)</div><input type="number" class="form-input" id="prPDV" value="13"></div>
+    <div><div class="price-label">Prag (kWh/6mj)</div><input type="number" class="form-input" id="prPrag" value="3000"></div>
+  </div>
+  <div class="form-group">
+    <div class="price-label">Uvećanje iznad praga (%)</div>
+    <input type="number" class="form-input" id="prUvecanje" value="35">
+  </div>
+
+  <button class="btn btn-primary" onclick="savePrices()" style="margin-top:4px;">💾 Spremi postavke</button>
+
+  <div class="sec-divider"></div>
+
+  <div class="card-title">VT/NT Raspored</div>
+  <div style="font-size:0.78rem; color:var(--text2); line-height:1.8;">
+    🌨️ <b>Zima</b>: VT 07:00–21:00 / NT 21:00–07:00<br>
+    ☀️ <b>Ljeto</b>: VT 08:00–22:00 / NT 22:00–08:00<br>
+    <span style="color:var(--text3)">Vikend i praznici: cijelo vrijeme NT</span>
+  </div>
+
+  <div class="sec-divider"></div>
+  <div class="card-title">Početno stanje brojila</div>
+  <div style="font-size:0.78rem; color:var(--text2); margin-bottom:10px;">Korigira se samo ako je početak praćenja pogrešno unesen.</div>
+  <button class="btn btn-ghost btn-sm" onclick="openEditMeterModal(); closeSidebar()">🔢 Uredi početno stanje</button>
+
+  <div class="sec-divider"></div>
+  <div class="card-title">Izvoz i uvoz</div>
+  <div style="display:flex;flex-direction:column;gap:6px">
+    <button class="btn btn-ghost btn-sm" onclick="exportJSON()">📦 Backup JSON</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportPDF()">📄 PDF račun</button>
+    <button class="btn btn-ghost btn-sm" onclick="exportExcel()">📊 Excel izvoz</button>
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('importFile').click()">📥 Uvezi JSON backup</button>
+    <button class="btn btn-ghost btn-sm" onclick="openPricesPromptModal()">💾 Ažuriraj cjenik (JSON)</button>
+  </div>
+
+  <div class="sec-divider"></div>
+  <div class="card-title" style="color:var(--danger)">Opasna zona</div>
+  <button class="btn btn-danger btn-sm" onclick="confirmReset()">🗑️ Resetiraj sve podatke</button>
+</div>
+
+<!-- ADD CONSUMER MODAL -->
+<div class="modal-overlay" id="addConsumerModal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">👤 Novi potrošač</div>
+    <div class="form-group">
+      <label class="form-label">Naziv (npr. Kuća, Apartman, Mama…)</label>
+      <input type="text" class="form-input" id="newConsumerName" placeholder="Potrošač" maxlength="40">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="closeAddConsumerModal()">Odustani</button>
+      <button class="btn btn-primary btn-sm" onclick="addConsumer()" style="width:auto">✓ Dodaj</button>
+    </div>
+  </div>
+</div>
+
+<!-- RENAME CONSUMER MODAL -->
+<div class="modal-overlay" id="renameConsumerModal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-title">✏️ Preimenuj potrošača</div>
+    <div class="form-group">
+      <label class="form-label">Novi naziv</label>
+      <input type="text" class="form-input" id="renameConsumerInput" placeholder="Novi naziv" maxlength="40">
+    </div>
+    <input type="hidden" id="renameConsumerId">
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="closeRenameConsumerModal()">Odustani</button>
+      <button class="btn btn-primary btn-sm" onclick="saveRenameConsumer()" style="width:auto">💾 Spremi</button>
+    </div>
+  </div>
+</div>
+
+<!-- RESET MODAL -->
+<div class="modal-overlay" id="resetModal">
+  <div class="modal">
+    <div class="modal-title">⚠️ Resetirati sve podatke?</div>
+    <div style="font-size:0.88rem; color:var(--text2)">Ova akcija briše sva očitanja i postavke. Napravite backup JSON prije brisanja!</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal()">Odustani</button>
+      <button class="btn btn-danger btn-sm" onclick="doReset()">Da, resetiraj</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT READING MODAL -->
+<div class="modal-overlay" id="editReadingModal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">✏️ Uredi očitanje</div>
+    <div class="form-group">
+      <label class="form-label">Datum</label>
+      <input type="date" class="form-input" id="editReadDate">
+    </div>
+    <div id="editReadFields" class="reading-grid"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="closeEditReadingModal()">Odustani</button>
+      <button class="btn btn-primary btn-sm" onclick="saveEditReading()" style="width:auto">💾 Spremi</button>
+    </div>
+  </div>
+</div>
+
+<!-- MONTH DETAIL MODAL -->
+<div class="modal-overlay" id="monthDetailModal">
+  <div class="modal month-detail-modal" style="max-width:500px;max-height:80vh;overflow-y:auto">
+    <div class="modal-title" id="monthDetailTitle">Detalji mjeseca</div>
+    <div id="monthDetailContent"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="closeMonthDetail()">Zatvori</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT METER START MODAL -->
+<div class="modal-overlay" id="editMeterModal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-title">🔢 Uredi početno stanje brojila</div>
+    <div style="font-size:0.82rem;color:var(--text2);margin-bottom:16px;">Promjena utječe na izračun prvog očitanja. Ostali unosi ostaju nepromijenjeni.</div>
+    <div id="editMeterFields" class="reading-grid"></div>
+    <div class="form-group" style="margin-top:12px">
+      <label class="form-label">Datum prvog očitanja</label>
+      <input type="date" class="form-input" id="editSetupDate">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="closeEditMeterModal()">Odustani</button>
+      <button class="btn btn-primary btn-sm" onclick="saveEditMeter()" style="width:auto">💾 Spremi</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+// ══════════════════════════════════════════════
+//  STATE — novi model: svaki meter nezavisan
+// ══════════════════════════════════════════════
+// meters: { jednot: {meterStart:{JT:0}, setupDate:'', periodStart:'', readings:[]},
+//           dvot:   {meterStart:{VT:0,NT:0}, setupDate:'', periodStart:'', readings:[]},
+//           dirigirana: {meterStart:{DIR_R1:0,DIR_R2:0}, setupDate:'', periodStart:'', readings:[]} }
+
+let state = {
+  consumers: [],
+  activeConsumerId: null,
+  pricesUpdatedAt: null,
+  prices: {
+    distJT: 0.023933, distVT: 0.044446, distNT: 0.020514, distDIR: 0.037608,
+    prijenosJT: 0.008175, prijenosVT: 0.021256, prijenosNT: 0.008175, prijenosDIR: 0.014716,
+    opskrbaJT: 0.037686, opskrbaVT: 0.097189, opskrbaNT: 0.047688, opskrbaDIR: 0.091324,
+    ommJT: 1.043000, ommDvot: 1.983000, ommDIR: 1.983000,
+    nakOpskrbaJT: 0.053000, nakOpskrbaDvot: 0.982000, nakOpskrbaDIR: 0.982000,
+    OIE: 0.013239, solidarna: 0.003982,
+    PDV: 13, prag: 3000, uvecanje: 35
+  },
+  theme: 'light'
+};
+
+// ── CONSUMER HELPERS ──
+function curConsumer() {
+  if (!state.consumers || state.consumers.length === 0) return null;
+  return state.consumers.find(c => c.id === state.activeConsumerId) || state.consumers[0];
+}
+function curTariffs() { return curConsumer()?.tariffs || []; }
+function curMeters()  { return curConsumer()?.meters  || {}; }
+function genId() { return 'c' + Date.now().toString(36); }
+
+// Definicija polja po tarifnom modelu
+const METER_DEFS = {
+  jednot:     { keys: ['JT'],         labels: {JT:'JT — Stanje brojila'},        groupLabel: '⬜ Jednotarifno brojilo',  shortLabels: {JT:'JT'} },
+  dvot:       { keys: ['VT','NT'],     labels: {VT:'VT — Stanje (dan)', NT:'NT — Stanje (noć)'}, groupLabel: '🔵 Dvotarifno brojilo', shortLabels: {VT:'VT', NT:'NT'} },
+  dirigirana: { keys: ['DIR_R1','DIR_R2'], labels: {DIR_R1:'DIR — Stanje R1', DIR_R2:'DIR — Stanje R2'}, groupLabel: '⚫ Dirigirano brojilo', shortLabels: {DIR_R1:'DIR R1', DIR_R2:'DIR R2'} }
+};
+
+// Rate po ključu
+function getRateMap(p) {
+  return {
+    JT:     p.distJT + p.prijenosJT + p.opskrbaJT,
+    VT:     p.distVT + p.prijenosVT + p.opskrbaVT,
+    NT:     p.distNT + p.prijenosNT + p.opskrbaNT,
+    DIR_R1: p.distDIR + p.prijenosDIR + p.opskrbaDIR,
+    DIR_R2: p.distDIR + p.prijenosDIR + p.opskrbaDIR
+  };
+}
+
+// Naknada po tarifi (EUR/mj)
+function getNaknada(tariffKey, p) {
+  if (tariffKey === 'jednot')     return p.ommJT + p.nakOpskrbaJT;
+  if (tariffKey === 'dvot')       return p.ommDvot + p.nakOpskrbaDvot;
+  if (tariffKey === 'dirigirana') return p.ommDIR + p.nakOpskrbaDIR;
+  return 0;
+}
+
+// ══════════════════════════════════════════════
+//  IZRAČUN jednog očitanja za jedan meter
+// ══════════════════════════════════════════════
+function calcOneMeterReading(tariffKey, currMeter, prevMeter, prevDate, currDate, kwhBeforeThis) {
+  const p = state.prices;
+  const keys = METER_DEFS[tariffKey].keys;
+  const rateMap = getRateMap(p);
+  const prag = p.prag || 3000;
+  const uvecanje = (p.uvecanje || 35) / 100;
+
+  const kwh = {};
+  let totalKwh = 0;
+  for (const k of keys) {
+    kwh['kwh_'+k] = Math.max(0, (currMeter[k] || 0) - (prevMeter[k] || 0));
+    totalKwh += kwh['kwh_'+k];
+  }
+
+  const kwhUnder = Math.max(0, Math.min(totalKwh, Math.max(0, prag - kwhBeforeThis)));
+  const kwhOver  = Math.max(0, totalKwh - kwhUnder);
+  const ratioOver = totalKwh > 0 ? kwhOver / totalKwh : 0;
+  const ratioUnder = 1 - ratioOver;
+
+  let energyCost = 0;
+  for (const k of keys) {
+    const kwhVal = kwh['kwh_'+k] || 0;
+    const rate = rateMap[k] || 0;
+    energyCost += kwhVal * ratioUnder * rate + kwhVal * ratioOver * rate * (1 + uvecanje);
+  }
+
+  const daysDiff = Math.max(1, Math.round((currDate - prevDate) / (1000 * 60 * 60 * 24)));
+  const monthFrac = daysDiff / 30;
+  const oieCost = totalKwh * (p.OIE || 0);
+  const naknadaCost = getNaknada(tariffKey, p) * monthFrac;
+  const sub = energyCost + oieCost + naknadaCost;
+  const pdvAmt = sub * (p.PDV / 100);
+
+  return { kwh, totalKwh, energyCost, oieCost, naknadaCost, pdvAmt,
+           total: sub + pdvAmt, daysDiff, penaltyApplied: kwhOver > 0, penaltyKwh: kwhOver };
+}
+
+// ══════════════════════════════════════════════
+//  RECALC FROM INDEX (za jedan meter)
+// ══════════════════════════════════════════════
+function recalcMeterFrom(tariffKey, startIdx) {
+  const m = curMeters()[tariffKey];
+  if (!m) return;
+  const p = state.prices;
+  const periodDate = new Date(m.periodStart || state.periodStart || '');
+
+  for (let i = startIdx; i < m.readings.length; i++) {
+    const r = m.readings[i];
+    const prevMeter = i > 0 ? m.readings[i-1].meter : m.meterStart;
+    const prevDate  = i > 0 ? new Date(m.readings[i-1].date) : new Date(m.setupDate);
+
+    let kwhBeforeThis = 0;
+    for (let j = 0; j < i; j++) {
+      if (new Date(m.readings[j].date) >= periodDate) kwhBeforeThis += m.readings[j].totalKwh;
+    }
+
+    const calc = calcOneMeterReading(tariffKey, r.meter, prevMeter, prevDate, new Date(r.date), kwhBeforeThis);
+    Object.assign(m.readings[i], calc);
+  }
+}
+
+// ══════════════════════════════════════════════
+//  INIT
+// ══════════════════════════════════════════════
+function init() {
+  const saved = localStorage.getItem('strujameter');
+  if (saved) {
+    const parsed = JSON.parse(saved);
+
+    // ── MIGRACIJA: stari format (tariffs na root razini) → consumers array ──
+    if (parsed.tariffs !== undefined && !parsed.consumers) {
+      let legacy = parsed;
+      if (legacy.readings !== undefined && legacy.meters === undefined) {
+        legacy = migrateOldState(legacy);
+      }
+      state = {
+        consumers: [{
+          id: genId(),
+          name: 'Potrošač 1',
+          tariffs: legacy.tariffs || [],
+          meters: legacy.meters || {}
+        }],
+        activeConsumerId: null,
+        prices: legacy.prices || state.prices,
+        pricesUpdatedAt: legacy.pricesUpdatedAt || null,
+        theme: legacy.theme || 'light'
+      };
+      state.activeConsumerId = state.consumers[0].id;
+      // Normalizacija setup flaga — consumer je aktivan ako ima tariffs
+      state.consumers[0]._setup = !!(legacy.setup);
+      saveState();
+    } else {
+      state = parsed;
+      // Migracija cijena ako treba
+      if (state.prices && state.prices.distJT === undefined) {
+        state.prices = JSON.parse(JSON.stringify({
+          distJT: 0.023933, distVT: 0.044446, distNT: 0.020514, distDIR: 0.037608,
+          prijenosJT: 0.008175, prijenosVT: 0.021256, prijenosNT: 0.008175, prijenosDIR: 0.014716,
+          opskrbaJT: 0.037686, opskrbaVT: 0.097189, opskrbaNT: 0.047688, opskrbaDIR: 0.091324,
+          ommJT: 1.043000, ommDvot: 1.983000, ommDIR: 1.983000,
+          nakOpskrbaJT: 0.053000, nakOpskrbaDvot: 0.982000, nakOpskrbaDIR: 0.982000,
+          OIE: 0.013239, solidarna: 0.003982, PDV: 13,
+          prag: state.prices.prag||3000, uvecanje: state.prices.uvecanje||35
+        }));
+        saveState();
+      }
+    }
+
+    // Provjeri je li aktivan consumer validan
+    if (!state.consumers) state.consumers = [];
+    if (state.consumers.length > 0 && !state.activeConsumerId) {
+      state.activeConsumerId = state.consumers[0].id;
+    }
+
+    const cc = curConsumer();
+    if (cc && (cc._setup || (cc.tariffs && cc.tariffs.length > 0))) {
+      showMain();
+    }
+  }
+  document.getElementById('setupDate').value = today();
+  document.getElementById('periodStart').value = sixMonthsAgo();
+  buildMeterSetupFields();
+  if (state.theme === 'light') applyLight();
+}
+
+function migrateOldState(old) {
+  const ns = {
+    setup: old.setup || false,
+    tariffs: old.tariffs || [],
+    meters: {},
+    prices: old.prices || {},
+    theme: old.theme || 'light'
+  };
+  // Premjesti stara readings u per-meter strukturu
+  for (const tk of (old.tariffs || [])) {
+    const def = METER_DEFS[tk];
+    if (!def) continue;
+    const meterStart = {};
+    def.keys.forEach(k => { meterStart[k] = (old.meterStart || {})[k] || 0; });
+    ns.meters[tk] = {
+      meterStart,
+      setupDate: old.setupDate || today(),
+      periodStart: old.periodStart || sixMonthsAgo(),
+      readings: (old.readings || []).map(r => {
+        const meter = {};
+        def.keys.forEach(k => { meter[k] = (r.meter || {})[k] || 0; });
+        return { date: r.date, meter, ...r };
+      })
+    };
+  }
+  return ns;
+}
+
+function today() { return new Date().toISOString().split('T')[0]; }
+function sixMonthsAgo() {
+  const d = new Date(); d.setMonth(d.getMonth() - 6);
+  return d.toISOString().split('T')[0];
+}
+
+function saveState() { localStorage.setItem('strujameter', JSON.stringify(state)); }
+
+// ══════════════════════════════════════════════
+//  SETUP
+// ══════════════════════════════════════════════
+function buildMeterSetupFields() {
+  const c = document.getElementById('meterSetupFields');
+  c.innerHTML = '';
+  const sel = curTariffs().length > 0 ? curTariffs() : (state._setupTariffs || []);
+  if (!sel || sel.length === 0) {
+    c.innerHTML = '<div style="color:var(--text3);font-size:0.82rem;text-align:center;padding:10px;">↓ Odaberite tarifni model ispod, pa unesite stanje brojila</div>';
+    return;
+  }
+  let html = '';
+  for (const tk of sel) {
+    const def = METER_DEFS[tk];
+    if (!def) continue;
+    html += `<div class="meter-block"><div class="meter-block-title">${def.groupLabel}</div><div class="meter-block-grid">`;
+    for (const k of def.keys) {
+      html += `<div class="form-group" style="margin-bottom:0">
+        <label class="form-label">${def.labels[k]}</label>
+        <input type="number" class="form-input" id="setup_${k}" placeholder="Početno stanje" step="0.1" min="0">
+      </div>`;
+    }
+    html += `</div></div>`;
+  }
+  c.innerHTML = html;
+}
+
+function toggleTariff(el) {
+  const t = el.dataset.tariff;
+  el.classList.toggle('selected');
+  if (!state._setupTariffs) state._setupTariffs = [];
+  if (el.classList.contains('selected')) {
+    if (!state._setupTariffs.includes(t)) state._setupTariffs.push(t);
+  } else {
+    state._setupTariffs = state._setupTariffs.filter(x => x !== t);
+  }
+  buildMeterSetupFields();
+}
+
+function completeSetup() {
+  const setupTariffs = state._setupTariffs || [];
+  if (setupTariffs.length === 0) { alert('Odaberite barem jedan tarifni model!'); return; }
+  const setupDate = document.getElementById('setupDate').value || today();
+  const periodStart = document.getElementById('periodStart').value || sixMonthsAgo();
+
+  const meters = {};
+  for (const tk of setupTariffs) {
+    const def = METER_DEFS[tk];
+    const meterStart = {};
+    for (const k of def.keys) {
+      meterStart[k] = parseFloat(document.getElementById('setup_'+k)?.value || '0');
+    }
+    meters[tk] = { meterStart, setupDate, periodStart, readings: [] };
+  }
+
+  // Ako nema consumera, kreiraj prvog
+  if (!state.consumers || state.consumers.length === 0) {
+    const id = genId();
+    state.consumers = [{ id, name: 'Potrošač 1', tariffs: setupTariffs, meters, _setup: true }];
+    state.activeConsumerId = id;
+  } else {
+    // Ažuriraj aktivnog consumera
+    const cc = curConsumer();
+    cc.tariffs = setupTariffs;
+    cc.meters = meters;
+    cc._setup = true;
+  }
+  delete state._setupTariffs;
+  saveState();
+  showMain();
+}
+
+function showMain() {
+  document.getElementById('setupScreen').classList.remove('active');
+  document.getElementById('mainTopbar').style.display = 'flex';
+  document.getElementById('mainContent').style.display = 'block';
+  buildReadingForms();
+  loadPricesIntoSidebar();
+  renderConsumerMenu();
+  renderAll();
+}
+
+// ══════════════════════════════════════════════
+//  TAB NAVIGATION
+// ══════════════════════════════════════════════
+let currentTab = 'pregled';
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById('tab-'+tab).classList.add('active');
+  document.getElementById('tabContent-'+tab).classList.add('active');
+  if (tab === 'mieseci' || tab === 'mjeseci') renderMonths();
+}
+
+// ══════════════════════════════════════════════
+//  UNOS OČITANJA — po meteru nezavisno
+// ══════════════════════════════════════════════
+function buildReadingForms() {
+  const c = document.getElementById('readingFields');
+  c.innerHTML = '';
+  if (!curTariffs() || curTariffs().length === 0) return;
+
+  let html = '';
+  for (const tk of curTariffs()) {
+    const def = METER_DEFS[tk];
+    const m = curMeters()[tk];
+    if (!def || !m) continue;
+    const lastReading = m.readings.length > 0 ? m.readings[m.readings.length-1] : null;
+    const lastDate = lastReading ? lastReading.date : m.setupDate;
+
+    html += `<div class="meter-block" id="mblock_${tk}">
+      <div class="meter-block-title">${def.groupLabel}</div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label class="form-label">Datum očitanja</label>
+        <input type="date" class="form-input" id="readDate_${tk}" value="${today()}">
+        <div class="prev-hint" style="margin-top:2px">Prethodno očitanje: ${lastDate}</div>
+      </div>
+      <div class="meter-block-grid">`;
+    for (const k of def.keys) {
+      const prevVal = lastReading ? lastReading.meter[k] : m.meterStart[k];
+      html += `<div class="form-group" style="margin-bottom:0">
+        <label class="form-label">${def.labels[k]}
+          <span class="prev-hint">Prethodno: ${Number(prevVal||0).toFixed(1)}</span>
+        </label>
+        <input type="number" class="form-input" id="read_${tk}_${k}" placeholder="Stanje s brojila" step="0.1" min="0">
+      </div>`;
+    }
+    html += `</div>
+      <button class="btn btn-primary" style="margin-top:10px;width:100%" onclick="addReading('${tk}')">+ Dodaj očitanje (${def.groupLabel.replace(/^[^ ]+ /,'')})</button>
+    </div>`;
+  }
+  c.innerHTML = html;
+}
+
+function addReading(tariffKey) {
+  const def = METER_DEFS[tariffKey];
+  const m = curMeters()[tariffKey];
+  if (!def || !m) return;
+
+  const date = document.getElementById('readDate_'+tariffKey).value;
+  if (!date) { alert('Unesite datum!'); return; }
+
+  const prevReading = m.readings.length > 0 ? m.readings[m.readings.length-1] : null;
+  if (prevReading && date <= prevReading.date) {
+    alert(`Datum (${date}) mora biti nakon prethodnog (${prevReading.date})!`); return;
+  }
+
+  const curr = {};
+  for (const k of def.keys) {
+    curr[k] = parseFloat(document.getElementById('read_'+tariffKey+'_'+k)?.value || '0');
+  }
+
+  const prev = prevReading ? prevReading.meter : m.meterStart;
+  const negKeys = def.keys.filter(k => (curr[k]||0) < (prev[k]||0));
+  if (negKeys.length > 0) {
+    if (!confirm(`⚠️ Stanje za ${negKeys.join(', ')} je manje od prethodnog. Moguć tipfeler. Nastaviti?`)) return;
+  }
+
+  const periodDate = new Date(m.periodStart);
+  let kwhBeforeThis = 0;
+  m.readings.forEach(r => { if (new Date(r.date) >= periodDate) kwhBeforeThis += r.totalKwh; });
+
+  const prevDate = prevReading ? new Date(prevReading.date) : new Date(m.setupDate);
+  const calc = calcOneMeterReading(tariffKey, curr, prev, prevDate, new Date(date), kwhBeforeThis);
+
+  m.readings.push({ date, meter: curr, ...calc });
+  saveState();
+
+  // Resetiraj polja ovog metera
+  for (const k of def.keys) {
+    const el = document.getElementById('read_'+tariffKey+'_'+k);
+    if (el) el.value = '';
+  }
+  // Osvježi prikaz prethodnog stanja
+  buildReadingForms();
+  renderAll();
+}
+
+// ══════════════════════════════════════════════
+//  RENDER
+// ══════════════════════════════════════════════
+function renderAll() {
+  renderStats();
+  renderHistory();
+  renderCharts();
+  checkOverLimit();
+  if (currentTab === 'mjeseci') renderMonths();
+}
+
+// ══ STATS PO METERU ══
+const METER_COLORS = { jednot: 'jt', dvot: 'dvot', dirigirana: 'dir' };
+
+function renderStats() {
+  const p = state.prices;
+  const prag = p.prag || 3000;
+  let totalKwh = 0, totalCost = 0;
+
+  // Per-meter stats cards — svaka s vlastitim odbrojavanjem
+  const container = document.getElementById('statsPerMeter');
+  let html = '<div class="meter-stats-grid">';
+  for (const tk of curTariffs()) {
+    const m = curMeters()[tk];
+    const def = METER_DEFS[tk];
+    if (!m || !def) continue;
+    const periodDate = new Date(m.periodStart);
+    let mKwh = 0, mCost = 0;
+    m.readings.forEach(r => {
+      if (new Date(r.date) >= periodDate) { mKwh += r.totalKwh; mCost += r.total; }
+    });
+    totalKwh += mKwh; totalCost += mCost;
+    const colorClass = METER_COLORS[tk] || '';
+    const mPct = Math.min(100, (mKwh / prag) * 100);
+    const mRemain = Math.max(0, prag - mKwh);
+    const barColor = mPct >= 100 ? 'var(--danger)' : mPct >= 85 ? 'var(--warn)' : 'var(--accent)';
+    html += `<div class="meter-stat-card ${colorClass}">
+      <div class="meter-stat-title">${def.groupLabel}</div>
+      <div class="meter-stat-kwh">${mKwh.toFixed(1)} <span style="font-size:0.7rem;font-weight:400">kWh</span></div>
+      <div class="meter-stat-eur">${mCost.toFixed(2)} €</div>
+      <div style="margin-top:8px">
+        <div style="display:flex;justify-content:space-between;font-size:0.65rem;color:var(--text3);margin-bottom:3px">
+          <span>${mPct.toFixed(0)}% praga</span>
+          <span style="color:${barColor}">ostalo: ${mRemain.toFixed(0)} kWh</span>
+        </div>
+        <div style="height:4px;background:var(--bg3);border-radius:2px;overflow:hidden">
+          <div style="height:100%;width:${mPct}%;background:${barColor};border-radius:2px;transition:width 0.4s"></div>
+        </div>
+      </div>
+    </div>`;
+  }
+  html += '</div>';
+  if (container) container.innerHTML = html;
+
+  document.getElementById('statTotal').textContent = totalKwh.toFixed(1);
+  document.getElementById('statCost').textContent = totalCost.toFixed(2) + ' €';
+
+  let minRemain = null, maxPct = 0;
+  for (const tk of curTariffs()) {
+    const m = curMeters()[tk];
+    if (!m) continue;
+    const periodDate = new Date(m.periodStart);
+    let mKwh = 0;
+    m.readings.forEach(r => { if (new Date(r.date) >= periodDate) mKwh += r.totalKwh; });
+    const remain = Math.max(0, prag - mKwh);
+    const pct = Math.min(100, (mKwh / prag) * 100);
+    if (minRemain === null || remain < minRemain) minRemain = remain;
+    if (pct > maxPct) maxPct = pct;
+  }
+  document.getElementById('statRemain').textContent = minRemain !== null ? minRemain.toFixed(1) : prag.toFixed(0);
+
+  const pct = Math.min(100, maxPct);
+  document.getElementById('progLabel').textContent = totalKwh.toFixed(1) + ' kWh (ukupno)';
+  const bar = document.getElementById('progressBar');
+  bar.style.width = pct + '%';
+  bar.className = 'progress-fill' + (pct >= 90 ? ' warn' : '');
+}
+
+function checkOverLimit() {
+  const p = state.prices;
+  const prag = p.prag || 3000;
+  const uv = p.uvecanje || 35;
+  const alertEl = document.getElementById('overAlert');
+  const alertText = document.getElementById('alertText');
+  const warnings = [], overs = [];
+
+  for (const tk of curTariffs()) {
+    const m = curMeters()[tk];
+    const def = METER_DEFS[tk];
+    if (!m || !def) continue;
+    const periodDate = new Date(m.periodStart);
+    let mKwh = 0;
+    m.readings.forEach(r => { if (new Date(r.date) >= periodDate) mKwh += r.totalKwh; });
+    const name = def.groupLabel.replace(/^[^ ]+ /, '');
+    if (mKwh >= prag) {
+      overs.push(`<b>${name}</b>: ${mKwh.toFixed(1)} kWh (prekoračenje: +${(mKwh-prag).toFixed(1)} kWh)`);
+    } else if (mKwh >= prag * 0.85) {
+      warnings.push(`<b>${name}</b>: ${mKwh.toFixed(1)} kWh (ostalo: ${(prag-mKwh).toFixed(1)} kWh)`);
+    }
+  }
+
+  if (overs.length > 0) {
+    alertText.innerHTML = `⚡ Prekoračen prag (${prag} kWh) za:<br>${overs.join('<br>')}
+      <br><span style="font-size:0.82rem">Za energiju iznad praga plaća se <b>+${uv}%</b> više.</span>`;
+    alertEl.classList.add('show');
+    alertEl.style.borderColor = '';
+    alertEl.style.background = '';
+  } else if (warnings.length > 0) {
+    alertText.innerHTML = `⚠️ Blizu praga (${prag} kWh):<br>${warnings.join('<br>')}`;
+    alertEl.classList.add('show');
+    alertEl.style.borderColor = 'var(--warn)';
+    alertEl.style.background = 'rgba(245,158,11,0.1)';
+  } else {
+    alertEl.classList.remove('show');
+    alertEl.style.borderColor = '';
+    alertEl.style.background = '';
+  }
+}
+
+function renderHistory() {
+  const c = document.getElementById('historyWrap');
+  let hasAny = curTariffs().some(tk => (curMeters()[tk]?.readings||[]).length > 0);
+  if (!hasAny) { c.innerHTML = '<div class="empty-state">Još nema unesenih očitanja.</div>'; return; }
+
+  let html = '';
+  for (const tk of curTariffs()) {
+    const m = curMeters()[tk];
+    const def = METER_DEFS[tk];
+    if (!m || !def || m.readings.length === 0) continue;
+    const p = state.prices;
+    const prag = p.prag || 3000;
+
+    html += `<div style="margin-bottom:18px">
+      <div class="meter-block-title" style="margin-bottom:8px">${def.groupLabel}</div>
+      <div style="overflow-x:auto"><table class="history-table">
+        <thead>
+          <tr>
+            <th rowspan="2">Datum</th>
+            ${def.keys.map(k=>`<th colspan="2" style="text-align:center;border-bottom:1px solid var(--border)">${def.shortLabels[k]}</th>`).join('')}
+            <th rowspan="2">Ukupno kWh</th>
+            <th rowspan="2">Dana</th>
+            <th rowspan="2">Iznos €</th>
+            <th rowspan="2"></th>
+          </tr>
+          <tr>
+            ${def.keys.map(()=>`<th style="font-size:0.65rem;color:var(--text3)">stanje</th><th style="font-size:0.65rem;color:var(--accent)">potrošnja</th>`).join('')}
+          </tr>
+        </thead><tbody>`;
+
+    const periodDate = new Date(m.periodStart);
+    let cumKwh = 0;
+    [...m.readings].reverse().forEach((r, ri) => {
+      const realIdx = m.readings.length - 1 - ri;
+      const idx = m.readings.indexOf(r);
+      let sum = 0;
+      const ps = periodDate;
+      for (let i = 0; i <= idx; i++) {
+        if (new Date(m.readings[i].date) >= ps) sum += m.readings[i].totalKwh;
+      }
+      const over = sum > prag;
+      const penaltyBadge = r.penaltyApplied
+        ? `<span style="color:var(--danger);font-size:0.7rem;margin-left:4px">⚡+${p.uvecanje||35}%</span>` : '';
+
+      html += `<tr>
+        <td>${r.date}</td>
+        ${def.keys.map(k=>`
+          <td style="color:var(--text2)">${(r.meter[k]||0).toFixed(1)}</td>
+          <td style="color:var(--accent);font-weight:600">${(r.kwh['kwh_'+k]||0).toFixed(2)}</td>
+        `).join('')}
+        <td class="${over?'over-limit':''}">${r.totalKwh.toFixed(2)}${penaltyBadge}</td>
+        <td style="color:var(--text3)">${r.daysDiff||'—'}</td>
+        <td class="amount">${r.total.toFixed(2)} €</td>
+        <td>
+          <button class="btn-edit" onclick="openEditReading('${tk}',${realIdx})" title="Uredi">✏️</button>
+          <button class="btn-del" onclick="deleteReading('${tk}',${realIdx})" title="Obriši">✕</button>
+        </td>
+      </tr>`;
+    });
+    html += '</tbody></table></div></div>';
+  }
+  c.innerHTML = html;
+}
+
+// ══════════════════════════════════════════════
+//  EDIT / DELETE READING
+// ══════════════════════════════════════════════
+let editState = { tariffKey: null, idx: null };
+
+function openEditReading(tariffKey, idx) {
+  editState = { tariffKey, idx };
+  const def = METER_DEFS[tariffKey];
+  const r = curMeters()[tariffKey].readings[idx];
+  document.getElementById('editReadDate').value = r.date;
+  const container = document.getElementById('editReadFields');
+  container.innerHTML = def.keys.map(k => `
+    <div class="form-group">
+      <label class="form-label">${def.labels[k]}</label>
+      <input type="number" class="form-input" id="editr_${k}" step="0.1" min="0" value="${r.meter[k]||0}">
+    </div>`).join('');
+  document.getElementById('editReadingModal').classList.add('open');
+}
+
+function closeEditReadingModal() {
+  document.getElementById('editReadingModal').classList.remove('open');
+  editState = { tariffKey: null, idx: null };
+}
+
+function saveEditReading() {
+  const { tariffKey, idx } = editState;
+  if (!tariffKey || idx === null) return;
+  const def = METER_DEFS[tariffKey];
+  const m = curMeters()[tariffKey];
+  const date = document.getElementById('editReadDate').value;
+  if (!date) { alert('Unesite datum!'); return; }
+  const prev = idx > 0 ? m.readings[idx-1] : null;
+  const next = idx < m.readings.length-1 ? m.readings[idx+1] : null;
+  if (prev && date <= prev.date) { alert(`Datum mora biti nakon prethodnog (${prev.date})!`); return; }
+  if (next && date >= next.date) { alert(`Datum mora biti prije sljedeceg (${next.date})!`); return; }
+  const curr = {};
+  for (const k of def.keys) {
+    curr[k] = parseFloat(document.getElementById('editr_'+k)?.value || '0');
+  }
+  m.readings[idx].date = date;
+  m.readings[idx].meter = curr;
+  recalcMeterFrom(tariffKey, idx);
+  saveState();
+  closeEditReadingModal();
+  buildReadingForms();
+  renderAll();
+}
+
+function deleteReading(tariffKey, idx) {
+  curMeters()[tariffKey].readings.splice(idx, 1);
+  if (idx < curMeters()[tariffKey].readings.length) recalcMeterFrom(tariffKey, idx);
+  saveState();
+  buildReadingForms();
+  renderAll();
+}
+
+// ══════════════════════════════════════════════
+//  EDIT METER START
+// ══════════════════════════════════════════════
+function openEditMeterModal() {
+  let html = '';
+  for (const tk of curTariffs()) {
+    const def = METER_DEFS[tk];
+    const m = curMeters()[tk];
+    if (!def || !m) continue;
+    html += `<div class="meter-block"><div class="meter-block-title">${def.groupLabel}</div>`;
+    html += `<div class="form-group"><label class="form-label">Datum prvog ocitanja</label>
+      <input type="date" class="form-input" id="editmeter_date_${tk}" value="${m.setupDate||''}"></div>`;
+    html += `<div class="meter-block-grid">`;
+    for (const k of def.keys) {
+      html += `<div class="form-group" style="margin-bottom:0">
+        <label class="form-label">${def.labels[k]}</label>
+        <input type="number" class="form-input" id="editmeter_${k}" step="0.1" value="${m.meterStart[k]||0}">
+      </div>`;
+    }
+    html += `</div></div>`;
+  }
+  document.getElementById('editMeterFields').innerHTML = html;
+  const oldDate = document.getElementById('editSetupDate');
+  if (oldDate) { const fg = oldDate.closest('.form-group'); if (fg) fg.style.display='none'; }
+  document.getElementById('editMeterModal').classList.add('open');
+}
+
+function closeEditMeterModal() {
+  document.getElementById('editMeterModal').classList.remove('open');
+}
+
+function saveEditMeter() {
+  for (const tk of curTariffs()) {
+    const def = METER_DEFS[tk];
+    const m = curMeters()[tk];
+    if (!def || !m) continue;
+    const newDate = document.getElementById('editmeter_date_'+tk)?.value;
+    if (newDate) m.setupDate = newDate;
+    for (const k of def.keys) {
+      m.meterStart[k] = parseFloat(document.getElementById('editmeter_'+k)?.value || '0');
+    }
+    if (m.readings.length > 0) recalcMeterFrom(tk, 0);
+  }
+  saveState();
+  closeEditMeterModal();
+  buildReadingForms();
+  renderAll();
+}
+
+// ══════════════════════════════════════════════
+//  CHARTS — odvojeni po kWh i €, po tarifama
+// ══════════════════════════════════════════════
+const TARIFF_CHART_COLORS = {
+  jednot:     { bg: 'rgba(148,163,184,0.3)', border: '#94a3b8' },
+  dvot:       { bg: 'rgba(59,130,246,0.3)',  border: '#3b82f6' },
+  dirigirana: { bg: 'rgba(100,116,139,0.3)', border: '#64748b' }
+};
+let chartKwh = null, chartEur = null;
+
+function renderCharts() {
+  const isDark = state.theme !== 'light';
+  const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.08)';
+  const textColor = isDark ? '#94a3b8' : '#475569';
+
+  // Collect all unique dates
+  const allDates = new Set();
+  for (const tk of curTariffs()) {
+    (curMeters()[tk]?.readings || []).forEach(r => allDates.add(r.date));
+  }
+  const labels = [...allDates].sort();
+  if (labels.length === 0) return;
+
+  // Build datasets per tariff
+  const datasetsKwh = [], datasetsEur = [];
+  for (const tk of curTariffs()) {
+    const m = curMeters()[tk];
+    const def = METER_DEFS[tk];
+    if (!m || !def) continue;
+    const col = TARIFF_CHART_COLORS[tk] || { bg: 'rgba(200,200,200,0.3)', border: '#ccc' };
+    const byDate = {};
+    m.readings.forEach(r => { byDate[r.date] = r; });
+    const kwhData = labels.map(d => byDate[d]?.totalKwh || 0);
+    const eurData = labels.map(d => parseFloat((byDate[d]?.total || 0).toFixed(2)));
+    const label = def.groupLabel.replace(/^[^ ]+ /, '');
+    datasetsKwh.push({ label, data: kwhData, backgroundColor: col.bg, borderColor: col.border, borderWidth: 2, borderRadius: 4 });
+    datasetsEur.push({ label, data: eurData, borderColor: col.border, backgroundColor: col.bg, borderWidth: 2, pointRadius: 4, tension: 0.4, fill: false });
+  }
+
+  const commonOpts = (yLabel, yUnit) => ({
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: textColor, font: { family: 'DM Mono', size: 11 } } } },
+    scales: {
+      x: { ticks: { color: textColor, font: { size: 10 } }, grid: { color: gridColor } },
+      y: { ticks: { color: textColor }, grid: { color: gridColor }, title: { display: true, text: yUnit, color: textColor } }
+    }
+  });
+
+  if (chartKwh) chartKwh.destroy();
+  chartKwh = new Chart(document.getElementById('chartKwh').getContext('2d'), {
+    type: 'bar', data: { labels, datasets: datasetsKwh }, options: commonOpts('kWh', 'kWh')
+  });
+
+  if (chartEur) chartEur.destroy();
+  chartEur = new Chart(document.getElementById('chartEur').getContext('2d'), {
+    type: 'line', data: { labels, datasets: datasetsEur }, options: commonOpts('€', '€')
+  });
+}
+
+// ══════════════════════════════════════════════
+//  MONTHS TAB
+// ══════════════════════════════════════════════
+const HR_MONTHS = ['Siječanj','Veljača','Ožujak','Travanj','Svibanj','Lipanj','Srpanj','Kolovoz','Rujan','Listopad','Studeni','Prosinac'];
+
+function getReadingsByMonth() {
+  const result = {};
+  for (const tk of curTariffs()) {
+    const m = curMeters()[tk];
+    const def = METER_DEFS[tk];
+    if (!m || !def) continue;
+    m.readings.forEach((r, idx) => {
+      const ym = r.date.slice(0,7);
+      if (!result[ym]) result[ym] = {};
+      if (!result[ym][tk]) result[ym][tk] = { kwh: 0, cost: 0, readings: [], startMeter: null, endMeter: null };
+      result[ym][tk].kwh += r.totalKwh;
+      result[ym][tk].cost += r.total;
+      result[ym][tk].readings.push(r);
+      if (!result[ym][tk].startMeter) {
+        result[ym][tk].startMeter = idx > 0 ? m.readings[idx-1].meter : m.meterStart;
+      }
+      result[ym][tk].endMeter = r.meter;
+    });
+  }
+  return result;
+}
+
+function renderMonths() {
+  const c = document.getElementById('monthsWrap');
+  const byMonth = getReadingsByMonth();
+  const months = Object.keys(byMonth).sort().reverse();
+  if (months.length === 0) { c.innerHTML = '<div class="empty-state">Još nema unesenih očitanja.</div>'; return; }
+
+  let html = '<div style="overflow-x:auto"><table class="month-table"><thead><tr><th>Mjesec</th>';
+  for (const tk of curTariffs()) {
+    const def = METER_DEFS[tk];
+    if (!def) continue;
+    html += `<th>${def.groupLabel.replace(/^[^ ]+ /, '')} kWh</th><th>Trošak €</th>`;
+  }
+  html += '<th>Ukupno kWh</th><th>Ukupno €</th></tr></thead><tbody>';
+
+  months.forEach(ym => {
+    const [yr, mo] = ym.split('-');
+    const label = `${HR_MONTHS[parseInt(mo)-1]} ${yr}`;
+    let totKwh = 0, totEur = 0;
+    let cells = '';
+    for (const tk of curTariffs()) {
+      const d = byMonth[ym][tk];
+      if (d) { totKwh += d.kwh; totEur += d.cost; cells += `<td class="month-kwh">${d.kwh.toFixed(2)}</td><td class="month-eur">${d.cost.toFixed(2)}</td>`; }
+      else cells += '<td style="color:var(--text3)">—</td><td style="color:var(--text3)">—</td>';
+    }
+    html += `<tr class="clickable" onclick="openMonthDetail('${ym}')">
+      <td style="font-weight:600">${label}</td>${cells}
+      <td class="month-kwh">${totKwh.toFixed(2)}</td>
+      <td class="month-eur" style="font-weight:700">${totEur.toFixed(2)}</td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  c.innerHTML = html;
+}
+
+function openMonthDetail(ym) {
+  const [yr, mo] = ym.split('-');
+  const label = `${HR_MONTHS[parseInt(mo)-1]} ${yr}`;
+  document.getElementById('monthDetailTitle').textContent = `📅 ${label}`;
+  const byMonth = getReadingsByMonth();
+  const monthData = byMonth[ym] || {};
+  const p = state.prices;
+  let html = '';
+
+  for (const tk of curTariffs()) {
+    const def = METER_DEFS[tk];
+    const d = monthData[tk];
+    if (!def || !d) continue;
+    html += `<div class="meter-section">
+      <h4>${def.groupLabel}</h4>`;
+    // Početno / završno stanje po ključu
+    for (const k of def.keys) {
+      const start = (d.startMeter?.[k] || 0).toFixed(1);
+      const end   = (d.endMeter?.[k] || 0).toFixed(1);
+      const diff  = (parseFloat(end) - parseFloat(start)).toFixed(2);
+      html += `<div class="month-detail-row"><span class="label">${def.labels[k]} — početno</span><span class="val">${start} kWh</span></div>`;
+      html += `<div class="month-detail-row"><span class="label">${def.labels[k]} — završno</span><span class="val">${end} kWh</span></div>`;
+      html += `<div class="month-detail-row"><span class="label">Potrošnja</span><span class="val" style="color:var(--accent)">${diff} kWh</span></div>`;
+    }
+    // Cijena po komponentama
+    const rateMap = getRateMap(p);
+    let energyCost = 0;
+    for (const k of def.keys) {
+      const kwhVal = d.readings.reduce((s,r) => s + (r.kwh?.['kwh_'+k]||0), 0);
+      const rate = rateMap[k] || 0;
+      energyCost += kwhVal * rate;
+    }
+    const oieCost = d.kwh * (p.OIE||0);
+    const monthFrac = d.readings.reduce((s,r) => s + (r.daysDiff||0), 0) / 30;
+    const nakCost = getNaknada(tk, p) * monthFrac;
+    const sub = energyCost + oieCost + nakCost;
+    const pdv = sub * (p.PDV/100);
+    html += `<div class="month-detail-row" style="margin-top:6px"><span class="label">Energija (dist+prijenos+opskrba)</span><span class="val">${energyCost.toFixed(2)} €</span></div>`;
+    html += `<div class="month-detail-row"><span class="label">OIE naknada</span><span class="val">${oieCost.toFixed(2)} €</span></div>`;
+    html += `<div class="month-detail-row"><span class="label">Naknade (OMM + opskrba)</span><span class="val">${nakCost.toFixed(2)} €</span></div>`;
+    html += `<div class="month-detail-row"><span class="label">Osnovica</span><span class="val">${sub.toFixed(2)} €</span></div>`;
+    html += `<div class="month-detail-row"><span class="label">PDV ${p.PDV}%</span><span class="val">${pdv.toFixed(2)} €</span></div>`;
+    html += `<div class="month-detail-row" style="font-weight:700;border-top:1px solid var(--border);margin-top:4px;padding-top:4px"><span class="label">UKUPNO</span><span class="val" style="color:var(--accent)">${d.cost.toFixed(2)} €</span></div>`;
+    html += '</div>';
+  }
+  document.getElementById('monthDetailContent').innerHTML = html;
+  document.getElementById('monthDetailModal').classList.add('open');
+}
+
+function closeMonthDetail() {
+  document.getElementById('monthDetailModal').classList.remove('open');
+}
+
+// ══════════════════════════════════════════════
+//  IMPORT PRICES (JSON datoteka)
+// ══════════════════════════════════════════════
+function importPrices(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      const required = ['distJT','prijenosJT','opskrbaJT','distVT','prijenosVT','opskrbaVT','distNT','prijenosNT','opskrbaNT','OIE','PDV'];
+      const missing = required.filter(k => imported[k] === undefined);
+      if (missing.length > 0) { alert('Nepotpun cjenik. Nedostaje: ' + missing.join(', ')); return; }
+      state.prices = Object.assign({}, state.prices, imported);
+      state.pricesUpdatedAt = today();
+      for (const tk of curTariffs()) {
+        if (curMeters()[tk]?.readings.length > 0) recalcMeterFrom(tk, 0);
+      }
+      saveState();
+      loadPricesIntoSidebar();
+      updatePricesLabel();
+      renderAll();
+      alert('✅ Cjenik uspješno ažuriran!');
+    } catch { alert('Greška pri čitanju datoteke cjenika.'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function openPricesPromptModal() {
+  document.getElementById('pricesPromptModal').classList.add('open');
+}
+
+function closePricesPromptModal() {
+  document.getElementById('pricesPromptModal').classList.remove('open');
+}
+
+function copyPricesPrompt() {
+  const text = document.getElementById('pricesPromptText').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    btn.textContent = '✅ Kopirano!';
+    setTimeout(() => { btn.textContent = '📋 Kopiraj prompt'; }, 2000);
+  });
+}
+
+function updatePricesLabel() {
+  const el = document.getElementById('pricesUpdatedLabel');
+  if (!el) return;
+  if (state.pricesUpdatedAt) {
+    el.textContent = '✅ Ažurirano: ' + state.pricesUpdatedAt;
+    el.style.color = 'var(--accent)';
+  } else {
+    el.textContent = 'Defaultne cijene (nije ažurirano)';
+    el.style.color = 'var(--text3)';
+  }
+}
+
+// ══════════════════════════════════════════════
+//  PRICES
+// ══════════════════════════════════════════════
+function loadPricesIntoSidebar() {
+  const p = state.prices;
+  updatePricesLabel();
+  document.getElementById('prDistJT').value = p.distJT;
+  document.getElementById('prPrijenosJT').value = p.prijenosJT;
+  document.getElementById('prOpskrbaJT').value = p.opskrbaJT;
+  document.getElementById('prOmmJT').value = p.ommJT;
+  document.getElementById('prNakOpskrbaJT').value = p.nakOpskrbaJT;
+  document.getElementById('prDistVT').value = p.distVT;
+  document.getElementById('prPrijenosVT').value = p.prijenosVT;
+  document.getElementById('prOpskrbaVT').value = p.opskrbaVT;
+  document.getElementById('prDistNT').value = p.distNT;
+  document.getElementById('prPrijenosNT').value = p.prijenosNT;
+  document.getElementById('prOpskrbaNT').value = p.opskrbaNT;
+  document.getElementById('prOmmDvot').value = p.ommDvot;
+  document.getElementById('prNakOpskrbaDvot').value = p.nakOpskrbaDvot;
+  document.getElementById('prDistDIR').value = p.distDIR;
+  document.getElementById('prPrijenosDIR').value = p.prijenosDIR;
+  document.getElementById('prOpskrbaDIR').value = p.opskrbaDIR;
+  document.getElementById('prOmmDIR').value = p.ommDIR;
+  document.getElementById('prNakOpskrbaDIR').value = p.nakOpskrbaDIR;
+  document.getElementById('prOIE').value = p.OIE;
+  document.getElementById('prSolidarna').value = p.solidarna;
+  document.getElementById('prPDV').value = p.PDV;
+  document.getElementById('prPrag').value = p.prag;
+  document.getElementById('prUvecanje').value = p.uvecanje;
+}
+
+function savePrices() {
+  const fv = id => parseFloat(document.getElementById(id).value) || 0;
+  state.prices = {
+    distJT: fv('prDistJT'), prijenosJT: fv('prPrijenosJT'), opskrbaJT: fv('prOpskrbaJT'),
+    ommJT: fv('prOmmJT'), nakOpskrbaJT: fv('prNakOpskrbaJT'),
+    distVT: fv('prDistVT'), prijenosVT: fv('prPrijenosVT'), opskrbaVT: fv('prOpskrbaVT'),
+    distNT: fv('prDistNT'), prijenosNT: fv('prPrijenosNT'), opskrbaNT: fv('prOpskrbaNT'),
+    ommDvot: fv('prOmmDvot'), nakOpskrbaDvot: fv('prNakOpskrbaDvot'),
+    distDIR: fv('prDistDIR'), prijenosDIR: fv('prPrijenosDIR'), opskrbaDIR: fv('prOpskrbaDIR'),
+    ommDIR: fv('prOmmDIR'), nakOpskrbaDIR: fv('prNakOpskrbaDIR'),
+    OIE: fv('prOIE'), solidarna: fv('prSolidarna'),
+    PDV: fv('prPDV'), prag: fv('prPrag'), uvecanje: fv('prUvecanje')
+  };
+  // Recalc sve metere
+  for (const tk of curTariffs()) {
+    if (curMeters()[tk]?.readings.length > 0) recalcMeterFrom(tk, 0);
+  }
+  saveState();
+  renderAll();
+  closeSidebar();
+}
+
+// ══════════════════════════════════════════════
+//  EXPORT / IMPORT
+// ══════════════════════════════════════════════
+function exportJSON() {
+  const json = JSON.stringify(state, null, 2);
+  const blob = new Blob([json], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'strujameter_backup.json'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importJSON(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      // Nova verzija s consumers[]
+      if (imported.consumers) {
+        state = imported;
+        saveState(); location.reload();
+      // Stara verzija s tariffs na root
+      } else if (imported.tariffs) {
+        let legacy = imported;
+        if (legacy.readings !== undefined && legacy.meters === undefined) {
+          legacy = migrateOldState(legacy);
+        }
+        const id = genId();
+        state.consumers = [{ id, name: 'Potrošač 1', tariffs: legacy.tariffs||[], meters: legacy.meters||{}, _setup: true }];
+        state.activeConsumerId = id;
+        if (legacy.prices) state.prices = legacy.prices;
+        if (legacy.pricesUpdatedAt) state.pricesUpdatedAt = legacy.pricesUpdatedAt;
+        if (legacy.theme) state.theme = legacy.theme;
+        saveState(); location.reload();
+      } else { alert('Neispravan format datoteke.'); }
+    } catch { alert('Greška pri uvozu.'); }
+  };
+  reader.readAsText(file);
+}
+
+function shareData() {
+  const json = JSON.stringify(state);
+  const b64 = btoa(encodeURIComponent(json));
+  const url = window.location.href.split('?')[0] + '?data=' + b64;
+  if (navigator.share) {
+    navigator.share({ title: 'StrujaMeter', url });
+  } else {
+    navigator.clipboard.writeText(url).then(() => alert('Link kopiran!'));
+  }
+}
+
+// ── PDF HELPER: zamjena hrvatskih znakova (jsPDF Helvetica ne podrzava Latin-Extended) ──
+function pdfT(s) {
+  if (typeof s !== 'string') return String(s ?? '');
+  return s
+    .replace(/[čć]/g,'c').replace(/[ČĆ]/g,'C')
+    .replace(/š/g,'s').replace(/Š/g,'S')
+    .replace(/ž/g,'z').replace(/Ž/g,'Z')
+    .replace(/đ/g,'d').replace(/Đ/g,'D')
+    .replace(/[^\x00-\xFF]/g,'')   // ukloni emoji i ostale non-Latin1
+    .replace(/\s+/g,' ').trim();
+}
+
+function exportPDF() {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const p = state.prices;
+  const rateMap = getRateMap(p);
+  let y = 15;
+
+  const addPage = () => { doc.addPage(); y = 15; };
+  const checkY = (need=10) => { if (y + need > 280) addPage(); };
+  const line = (x1,y1,x2,y2) => { doc.setDrawColor(180,180,180); doc.line(x1,y1,x2,y2); };
+
+  const consumerName = curConsumer()?.name || 'StrujaMeter';
+
+  // Header
+  doc.setFontSize(18); doc.setFont(undefined,'bold');
+  doc.text('StrujaMeter - Obracun', 20, y); y += 8;
+  doc.setFontSize(9); doc.setFont(undefined,'normal');
+  doc.setTextColor(100);
+  doc.text(pdfT(`Potrosac: ${consumerName}`), 20, y); y += 5;
+  doc.text(`Datum izvoza: ${today()}`, 20, y); y += 5;
+  const periods = curTariffs().map(tk=>curMeters()[tk]?.periodStart||'').filter(Boolean);
+  doc.text(pdfT(`Obracunsko razdoblje: ${periods.join(', ')} - ${today()}`), 20, y);
+  doc.setTextColor(0); y += 8;
+  line(15, y, 195, y); y += 6;
+
+  for (const tk of curTariffs()) {
+    const m = curMeters()[tk];
+    const def = METER_DEFS[tk];
+    if (!m || !def || m.readings.length === 0) continue;
+
+    checkY(30);
+    doc.setFontSize(11); doc.setFont(undefined,'bold');
+    doc.text(pdfT(def.groupLabel), 20, y); y += 7;
+    doc.setFont(undefined,'normal'); doc.setFontSize(8.5);
+
+    // Table header
+    const cols = [20, 55, 90, 120, 148, 172, 195];
+    const headers = ['Datum','Reg.','Stanje od','Stanje do','Potrosnja kWh','Cijena EUR/kWh','Iznos EUR'];
+    doc.setFillColor(240,240,240); doc.rect(15, y-4, 180, 7, 'F');
+    headers.forEach((h,i) => doc.text(h, cols[i], y));
+    y += 4; line(15, y, 195, y); y += 4;
+
+    let grandKwh = 0, grandEnergy = 0;
+    m.readings.forEach((r, idx) => {
+      const prevMeter = idx > 0 ? m.readings[idx-1].meter : m.meterStart;
+      for (const k of def.keys) {
+        checkY(8);
+        const startVal = (prevMeter[k]||0).toFixed(2);
+        const endVal = (r.meter[k]||0).toFixed(2);
+        const kwhVal = (r.kwh?.['kwh_'+k]||0);
+        const rate = rateMap[k] || 0;
+        const iznos = kwhVal * rate;
+        doc.text(r.date, cols[0], y);
+        doc.text(k, cols[1], y);
+        doc.text(startVal, cols[2], y);
+        doc.text(endVal, cols[3], y);
+        doc.text(kwhVal.toFixed(2), cols[4], y);
+        doc.text(rate.toFixed(6), cols[5], y);
+        doc.text(iznos.toFixed(2), cols[6], y);
+        grandKwh += kwhVal; grandEnergy += iznos;
+        y += 6;
+      }
+    });
+
+    // Naknade
+    const totalDays = m.readings.reduce((s,r) => s+(r.daysDiff||0), 0);
+    const monthFrac = totalDays / 30;
+    const nakVal = getNaknada(tk, p) * monthFrac;
+    const oieVal = grandKwh * (p.OIE||0);
+    const sub = grandEnergy + oieVal + nakVal;
+    const pdvAmt = sub * (p.PDV/100);
+    const total = sub + pdvAmt;
+
+    checkY(45);
+    y += 2; line(15, y, 195, y); y += 5;
+    const rows2 = [
+      [pdfT(`Naknada OMM + opskrba (${totalDays} dana)`), nakVal.toFixed(2)+' EUR'],
+      [pdfT(`OIE naknada (${grandKwh.toFixed(2)} kWh x ${p.OIE})`), oieVal.toFixed(2)+' EUR'],
+      ['Solidarna naknada', '0,00 EUR (neto)'],
+    ];
+    rows2.forEach(([l,v]) => {
+      doc.text(l, 20, y); doc.text(v, 160, y, {align:'right'}); y += 6;
+    });
+    line(15, y, 195, y); y += 4;
+    doc.text('Porezna osnovica', 20, y); doc.text(sub.toFixed(2)+' EUR', 160, y, {align:'right'}); y += 5;
+    doc.text(`PDV ${p.PDV}%`, 20, y); doc.text(pdvAmt.toFixed(2)+' EUR', 160, y, {align:'right'}); y += 5;
+    doc.setFont(undefined,'bold');
+    doc.text('UKUPAN IZNOS', 20, y); doc.text(total.toFixed(2)+' EUR', 160, y, {align:'right'});
+    doc.setFont(undefined,'normal'); y += 10;
+    line(15, y, 195, y); y += 8;
+  }
+
+  doc.save('strujameter_racun.pdf');
+}
+
+function exportExcel() {
+  const wb = XLSX.utils.book_new();
+  for (const tk of curTariffs()) {
+    const m = curMeters()[tk];
+    const def = METER_DEFS[tk];
+    if (!m || !def) continue;
+    const rows = [['Datum', ...def.keys.map(k=>def.labels[k]+' stanje'), ...def.keys.map(k=>def.shortLabels[k]+' potrošnja kWh'), 'Ukupno kWh', 'Dana', 'Iznos EUR']];
+    m.readings.forEach(r => {
+      rows.push([r.date, ...def.keys.map(k=>r.meter[k]||0), ...def.keys.map(k=>r.kwh['kwh_'+k]||0), r.totalKwh, r.daysDiff, r.total]);
+    });
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), def.groupLabel.replace(/^[^ ]+ /,'').slice(0,31));
+  }
+  XLSX.writeFile(wb, 'strujameter.xlsx');
+}
+
+function toggleExportMenu() {
+  const m = document.getElementById('exportMenu');
+  m.classList.toggle('open');
+}
+
+function openSidebar() { document.getElementById('sidebar').classList.add('open'); document.getElementById('overlay').classList.add('open'); }
+function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('overlay').classList.remove('open'); }
+function toggleTheme() { state.theme = state.theme === 'light' ? 'dark' : 'light'; if (state.theme==='light') applyLight(); else applyDark(); saveState(); }
+
+function applyLight() {
+  document.documentElement.style.setProperty('--bg','#f0f4f8');
+  document.documentElement.style.setProperty('--bg2','#e2e8f0');
+  document.documentElement.style.setProperty('--bg3','#cbd5e1');
+  document.documentElement.style.setProperty('--card','#ffffff');
+  document.documentElement.style.setProperty('--border','#cbd5e1');
+  document.documentElement.style.setProperty('--text','#0f172a');
+  document.documentElement.style.setProperty('--text2','#334155');
+  document.documentElement.style.setProperty('--text3','#64748b');
+}
+function applyDark() {
+  document.documentElement.style.setProperty('--bg','#0a0f1e');
+  document.documentElement.style.setProperty('--bg2','#111827');
+  document.documentElement.style.setProperty('--bg3','#1a2235');
+  document.documentElement.style.setProperty('--card','#151f33');
+  document.documentElement.style.setProperty('--border','#1e2d45');
+  document.documentElement.style.setProperty('--text','#e2e8f0');
+  document.documentElement.style.setProperty('--text2','#94a3b8');
+  document.documentElement.style.setProperty('--text3','#64748b');
+}
+
+function confirmReset() { document.getElementById('resetModal').classList.add('open'); }
+function closeModal() { document.getElementById('resetModal').classList.remove('open'); }
+function doReset() { localStorage.removeItem('strujameter'); location.reload(); }
+
+// ══════════════════════════════════════════════
+//  CONSUMER MANAGEMENT
+// ══════════════════════════════════════════════
+function renderConsumerMenu() {
+  const cc = curConsumer();
+  const label = document.getElementById('consumerLabel');
+  if (label) label.textContent = cc?.name || '—';
+
+  const list = document.getElementById('consumerList');
+  if (!list) return;
+  list.innerHTML = (state.consumers || []).map(c => `
+    <div class="consumer-item ${c.id === state.activeConsumerId ? 'active' : ''}" onclick="switchConsumer('${c.id}')">
+      <div class="consumer-item-dot"></div>
+      <div class="consumer-item-name">${c.name}</div>
+      <div class="consumer-item-actions">
+        <button class="consumer-action-btn" onclick="event.stopPropagation();openRenameConsumerModal('${c.id}')" title="Preimenuj">✏️</button>
+        ${state.consumers.length > 1
+          ? `<button class="consumer-action-btn" onclick="event.stopPropagation();deleteConsumer('${c.id}')" title="Obriši" style="color:var(--danger)">✕</button>`
+          : ''}
+      </div>
+    </div>`).join('');
+}
+
+function toggleConsumerMenu() {
+  const menu = document.getElementById('consumerMenu');
+  menu.classList.toggle('open');
+  // Zatvori kliknuto van menija
+  if (menu.classList.contains('open')) {
+    setTimeout(() => {
+      document.addEventListener('click', closeConsumerMenuOutside, { once: true });
+    }, 0);
+  }
+}
+
+function closeConsumerMenuOutside(e) {
+  const dd = document.getElementById('consumerDropdown');
+  if (!dd?.contains(e.target)) {
+    document.getElementById('consumerMenu')?.classList.remove('open');
+  }
+}
+
+function switchConsumer(id) {
+  state.activeConsumerId = id;
+  saveState();
+  document.getElementById('consumerMenu').classList.remove('open');
+  renderConsumerMenu();
+  buildReadingForms();
+  renderAll();
+}
+
+function openAddConsumerModal() {
+  document.getElementById('consumerMenu').classList.remove('open');
+  document.getElementById('newConsumerName').value = '';
+  document.getElementById('addConsumerModal').classList.add('open');
+  setTimeout(() => document.getElementById('newConsumerName').focus(), 100);
+}
+
+function closeAddConsumerModal() {
+  document.getElementById('addConsumerModal').classList.remove('open');
+}
+
+function addConsumer() {
+  const name = document.getElementById('newConsumerName').value.trim() || `Potrošač ${(state.consumers||[]).length + 1}`;
+  const id = genId();
+  if (!state.consumers) state.consumers = [];
+  state.consumers.push({ id, name, tariffs: [], meters: {}, _setup: false });
+  state.activeConsumerId = id;
+  saveState();
+  closeAddConsumerModal();
+  renderConsumerMenu();
+  // Pokaži setup screen za novog consumera
+  document.getElementById('mainTopbar').style.display = 'flex';
+  document.getElementById('mainContent').style.display = 'none';
+  document.getElementById('setupScreen').classList.add('active');
+  // Resetiraj setup state
+  delete state._setupTariffs;
+  document.querySelectorAll('.tariff-item').forEach(el => el.classList.remove('selected'));
+  document.getElementById('setupDate').value = today();
+  document.getElementById('periodStart').value = sixMonthsAgo();
+  buildMeterSetupFields();
+}
+
+function openRenameConsumerModal(id) {
+  const c = state.consumers.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('renameConsumerId').value = id;
+  document.getElementById('renameConsumerInput').value = c.name;
+  document.getElementById('renameConsumerModal').classList.add('open');
+  setTimeout(() => document.getElementById('renameConsumerInput').focus(), 100);
+}
+
+function closeRenameConsumerModal() {
+  document.getElementById('renameConsumerModal').classList.remove('open');
+}
+
+function saveRenameConsumer() {
+  const id = document.getElementById('renameConsumerId').value;
+  const name = document.getElementById('renameConsumerInput').value.trim();
+  if (!name) { alert('Unesite naziv!'); return; }
+  const c = state.consumers.find(x => x.id === id);
+  if (c) c.name = name;
+  saveState();
+  closeRenameConsumerModal();
+  renderConsumerMenu();
+}
+
+function deleteConsumer(id) {
+  if (state.consumers.length <= 1) { alert('Ne možete obrisati jedini potrošač.'); return; }
+  const c = state.consumers.find(x => x.id === id);
+  if (!confirm(`Obrisati potrošača "${c?.name}"? Sva očitanja bit će trajno izbrisana.`)) return;
+  state.consumers = state.consumers.filter(x => x.id !== id);
+  if (state.activeConsumerId === id) {
+    state.activeConsumerId = state.consumers[0].id;
+  }
+  saveState();
+  renderConsumerMenu();
+  buildReadingForms();
+  renderAll();
+}
+
+// Expose globals
+window.toggleConsumerMenu = toggleConsumerMenu;
+window.switchConsumer = switchConsumer;
+window.openAddConsumerModal = openAddConsumerModal;
+window.closeAddConsumerModal = closeAddConsumerModal;
+window.addConsumer = addConsumer;
+window.openRenameConsumerModal = openRenameConsumerModal;
+window.closeRenameConsumerModal = closeRenameConsumerModal;
+window.saveRenameConsumer = saveRenameConsumer;
+window.deleteConsumer = deleteConsumer;
+window.toggleTariff = toggleTariff;
+window.completeSetup = completeSetup;
+window.addReading = addReading;
+window.deleteReading = deleteReading;
+window.openEditReading = openEditReading;
+window.closeEditReadingModal = closeEditReadingModal;
+window.saveEditReading = saveEditReading;
+window.openEditMeterModal = openEditMeterModal;
+window.closeEditMeterModal = closeEditMeterModal;
+window.saveEditMeter = saveEditMeter;
+window.openSidebar = openSidebar;
+window.closeSidebar = closeSidebar;
+window.toggleTheme = toggleTheme;
+window.savePrices = savePrices;
+window.toggleExportMenu = toggleExportMenu;
+window.exportJSON = exportJSON;
+window.importJSON = importJSON;
+window.shareData = shareData;
+window.exportPDF = exportPDF;
+window.exportExcel = exportExcel;
+window.confirmReset = confirmReset;
+window.closeModal = closeModal;
+window.doReset = doReset;
+window.switchTab = switchTab;
+window.openMonthDetail = openMonthDetail;
+window.closeMonthDetail = closeMonthDetail;
+window.importPrices = importPrices;
+window.openPricesPromptModal = openPricesPromptModal;
+window.closePricesPromptModal = closePricesPromptModal;
+window.copyPricesPrompt = copyPricesPrompt;
+
+init();
+
+})(); // end IIFE
+</script>
+
+<!-- PRICES PROMPT MODAL -->
+<div class="modal-overlay" id="pricesPromptModal">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-title">💾 Ažuriranje cjenika</div>
+    <div style="font-size:0.82rem;color:var(--text2);margin-bottom:12px;">
+      Kopiraj ovaj prompt, pošalji ga Claude AI-u, dobij JSON datoteku i učitaj je ovdje.
+    </div>
+
+    <div style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:0.72rem;font-family:var(--mono);color:var(--text2);white-space:pre-wrap;line-height:1.6;max-height:220px;overflow-y:auto;user-select:all" id="pricesPromptText">Generiraj mi JSON datoteku s trenutnim HEP cijenama električne energije u Hrvatskoj za tarifne modele JT (jednotarifni), VT/NT (dvotarifni) i DIR (dirigirani). Format mora biti točno ovaj (bez komentara, samo JSON):
+
+{
+  "distJT": 0.023933,
+  "prijenosJT": 0.008175,
+  "opskrbaJT": 0.037686,
+  "ommJT": 1.043000,
+  "nakOpskrbaJT": 0.053000,
+  "distVT": 0.044446,
+  "prijenosVT": 0.021256,
+  "opskrbaVT": 0.097189,
+  "distNT": 0.020514,
+  "prijenosNT": 0.008175,
+  "opskrbaNT": 0.047688,
+  "ommDvot": 1.983000,
+  "nakOpskrbaDvot": 0.982000,
+  "distDIR": 0.037608,
+  "prijenosDIR": 0.014716,
+  "opskrbaDIR": 0.091324,
+  "ommDIR": 1.983000,
+  "nakOpskrbaDIR": 0.982000,
+  "OIE": 0.013239,
+  "solidarna": 0.003982,
+  "PDV": 13,
+  "prag": 3000,
+  "uvecanje": 35
+}
+
+Popuni stvarnim trenutnim cijenama iz HEP cjenika. Sve cijene su bez PDV-a, u EUR/kWh osim OMM i naknada za opskrbu koje su EUR/mj. Vrati SAMO JSON, bez objašnjenja.</div>
+
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="copyPricesPrompt()">📋 Kopiraj prompt</button>
+      <button class="btn btn-primary btn-sm" onclick="document.getElementById('importPricesFile').click(); closePricesPromptModal()">📥 Učitaj JSON datoteku</button>
+      <button class="btn btn-ghost btn-sm" onclick="closePricesPromptModal()">Zatvori</button>
+    </div>
+  </div>
+</div>
+
+<!-- PWA INSTALL BANNER -->
+<div class="pwa-banner" id="pwaBanner">
+  <div class="pwa-banner-icon">⚡</div>
+  <div class="pwa-banner-text">
+    <div class="pwa-banner-title">Instaliraj StrujaMeter</div>
+    <div class="pwa-banner-sub">Radi offline · Brži pristup</div>
+  </div>
+  <div class="pwa-banner-actions">
+    <button class="pwa-btn-dismiss" onclick="dismissPWA()">Ne</button>
+    <button class="pwa-btn-install" onclick="installPWA()">Instaliraj</button>
+  </div>
+</div>
+
+<script>
+// ── SERVICE WORKER ──
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/strujameter/sw.js').catch(() => {});
+  });
+}
+
+// ── PWA INSTALL PROMPT ──
+let deferredPrompt = null;
+const banner = document.getElementById('pwaBanner');
+
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  // Pokaži banner nakon 2s
+  setTimeout(() => banner.classList.add('show'), 2000);
+});
+
+function installPWA() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => {
+    deferredPrompt = null;
+    banner.classList.remove('show');
+  });
+}
+
+function dismissPWA() {
+  banner.classList.remove('show');
+  deferredPrompt = null;
+}
+
+// Sakrij banner ako je već instaliran
+window.addEventListener('appinstalled', () => {
+  banner.classList.remove('show');
+});
+</script>
+</body>
+</html>
